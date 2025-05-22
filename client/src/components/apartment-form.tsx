@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -17,17 +17,22 @@ import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  sqMeters: z.number().min(20).max(150),
+  sqMeters: z.tuple([z.number().min(20).max(150), z.number().min(20).max(150)])
+    .refine(data => data[0] <= data[1], { message: "Min sq meters must be less than or equal to max" }),
   sqMetersWorth: z.number().min(0).optional(),
-  numWindows: z.number().min(1).max(12),
+  numWindows: z.tuple([z.number().min(1).max(12), z.number().min(1).max(12)])
+    .refine(data => data[0] <= data[1], { message: "Min windows must be less than or equal to max" }),
   numWindowsWorth: z.number().min(0).optional(),
   windowDirections: z.array(z.string()),
   windowDirectionsWorth: z.number().min(0).optional(),
-  totalWindowSize: z.number().min(2).max(25),
+  totalWindowSize: z.tuple([z.number().min(2).max(25), z.number().min(2).max(25)])
+    .refine(data => data[0] <= data[1], { message: "Min window size must be less than or equal to max" }),
   totalWindowSizeWorth: z.number().min(0).optional(),
-  numBedrooms: z.number().min(1).max(5),
+  numBedrooms: z.tuple([z.number().min(1).max(5), z.number().min(1).max(5)])
+    .refine(data => data[0] <= data[1], { message: "Min bedrooms must be less than or equal to max" }),
   numBedroomsWorth: z.number().min(0).optional(),
-  numBathrooms: z.number().min(1).max(4),
+  numBathrooms: z.tuple([z.number().min(1).max(4), z.number().min(1).max(4)])
+    .refine(data => data[0] <= data[1], { message: "Min bathrooms must be less than or equal to max" }),
   numBathroomsWorth: z.number().min(0).optional(),
   hasDishwasher: z.boolean(),
   dishwasherWorth: z.number().min(0).optional(),
@@ -42,8 +47,8 @@ const formSchema = z.object({
   quietness: z.number().min(0).max(100).optional(),
   guests: z.number().min(0).max(100).optional(),
   personalSpace: z.number().min(0).max(100).optional(),
-  sleepTime: z.number().min(480).max(180).optional(),
-  wakeTime: z.number().min(240).max(780).optional(),
+  sleepTime: z.number().min(0).max(1439).optional(), // minutes in a day
+  wakeTime: z.number().min(0).max(1439).optional(), // minutes in a day
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -53,28 +58,51 @@ interface ApartmentFormProps {
   onApartmentCountChange: (count: number) => void;
 }
 
-const windowDirections = ["N", "S", "E", "W"];
+const windowDirectionsOptions = ["N", "S", "E", "W"];
+
+interface IndividualCountState {
+  sqMeters: number | null;
+  numWindows: number | null;
+  windowDirections: number | null;
+  totalWindowSize: number | null;
+  numBedrooms: number | null;
+  numBathrooms: number | null;
+  hasDishwasher: number | null;
+  hasWasher: number | null;
+  hasDryer: number | null;
+}
 
 export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: ApartmentFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [apartmentCounts, setApartmentCounts] = useState<Record<string, number>>({});
   const { toast } = useToast();
+
+  const [individualCounts, setIndividualCounts] = useState<IndividualCountState>({
+    sqMeters: null,
+    numWindows: null,
+    windowDirections: null,
+    totalWindowSize: null,
+    numBedrooms: null,
+    numBathrooms: null,
+    hasDishwasher: null,
+    hasWasher: null,
+    hasDryer: null,
+  });
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      sqMeters: 75,
+      sqMeters: [50, 100],
       sqMetersWorth: 0,
-      numWindows: 4,
+      numWindows: [2, 6],
       numWindowsWorth: 0,
       windowDirections: [],
       windowDirectionsWorth: 0,
-      totalWindowSize: 12,
+      totalWindowSize: [8, 15],
       totalWindowSizeWorth: 0,
-      numBedrooms: 2,
+      numBedrooms: [1, 3],
       numBedroomsWorth: 0,
-      numBathrooms: 1,
+      numBathrooms: [1, 2],
       numBathroomsWorth: 0,
       hasDishwasher: false,
       dishwasherWorth: 0,
@@ -82,63 +110,135 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       washerWorth: 0,
       hasDryer: false,
       dryerWorth: 0,
-      bidAmount: 0,
+      bidAmount: 1000,
       allowRoommates: true,
       maxRoommates: 2,
       cleanliness: 75,
       quietness: 60,
       guests: 40,
       personalSpace: 80,
-      sleepTime: 660, // 11:00 PM
-      wakeTime: 420, // 7:00 AM
+      sleepTime: 1380, // 11:00 PM (23 * 60)
+      wakeTime: 420, // 7:00 AM (7 * 60)
     },
   });
 
   const watchedValues = form.watch();
 
-  // Update apartment counts when form values change
+  const fetchIndividualCount = useCallback(async (field: keyof IndividualCountState, params: URLSearchParams) => {
+    try {
+      const response = await fetch(`/api/apartments/count?${params.toString()}`);
+      const data = await response.json();
+      setIndividualCounts(prev => ({ ...prev, [field]: data.count }));
+    } catch (error) {
+      console.error(`Error fetching count for ${field}:`, error);
+      setIndividualCounts(prev => ({ ...prev, [field]: null }));
+    }
+  }, []);
+
   useEffect(() => {
-    const updateCounts = async () => {
+    const params = new URLSearchParams();
+    params.set('sqMetersMin', watchedValues.sqMeters[0].toString());
+    params.set('sqMetersMax', watchedValues.sqMeters[1].toString());
+    fetchIndividualCount('sqMeters', params);
+  }, [watchedValues.sqMeters, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('numWindowsMin', watchedValues.numWindows[0].toString());
+    params.set('numWindowsMax', watchedValues.numWindows[1].toString());
+    fetchIndividualCount('numWindows', params);
+  }, [watchedValues.numWindows, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (watchedValues.windowDirections.length > 0) {
+      params.set('windowDirections', watchedValues.windowDirections.join(','));
+    } else {
+      // If no directions selected, effectively don't filter by it for its individual count
+      // or send a param that the backend understands as "all" for this specific criteria.
+      // For simplicity, if empty, the backend won't filter by it.
+      // To get a "true" individual count, we might need to fetch all if empty.
+      // For now, if empty, it will show total apartments.
+      // A better approach might be to not call if empty, or handle it specifically.
+      // Let's assume an empty directions array means "don't care" for this specific filter.
+    }
+    fetchIndividualCount('windowDirections', params);
+  }, [watchedValues.windowDirections, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('totalWindowSizeMin', watchedValues.totalWindowSize[0].toString());
+    params.set('totalWindowSizeMax', watchedValues.totalWindowSize[1].toString());
+    fetchIndividualCount('totalWindowSize', params);
+  }, [watchedValues.totalWindowSize, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('numBedroomsMin', watchedValues.numBedrooms[0].toString());
+    params.set('numBedroomsMax', watchedValues.numBedrooms[1].toString());
+    fetchIndividualCount('numBedrooms', params);
+  }, [watchedValues.numBedrooms, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    params.set('numBathroomsMin', watchedValues.numBathrooms[0].toString());
+    params.set('numBathroomsMax', watchedValues.numBathrooms[1].toString());
+    fetchIndividualCount('numBathrooms', params);
+  }, [watchedValues.numBathrooms, fetchIndividualCount]);
+  
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (watchedValues.hasDishwasher) params.set('hasDishwasher', 'true');
+    // If false, we want count of ALL apartments, or apartments that DONT have it.
+    // For "matches this criteria", if false, it means "I don't require it".
+    // The count should reflect apartments that meet the "true" state.
+    fetchIndividualCount('hasDishwasher', params);
+  }, [watchedValues.hasDishwasher, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (watchedValues.hasWasher) params.set('hasWasher', 'true');
+    fetchIndividualCount('hasWasher', params);
+  }, [watchedValues.hasWasher, fetchIndividualCount]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (watchedValues.hasDryer) params.set('hasDryer', 'true');
+    fetchIndividualCount('hasDryer', params);
+  }, [watchedValues.hasDryer, fetchIndividualCount]);
+
+
+  // Update overall apartment count for the header
+  useEffect(() => {
+    const updateOverallCount = async () => {
       try {
         const params = new URLSearchParams();
-        params.set('sqMeters', watchedValues.sqMeters.toString());
-        params.set('numWindows', watchedValues.numWindows.toString());
-        params.set('totalWindowSize', watchedValues.totalWindowSize.toString());
-        params.set('numBedrooms', watchedValues.numBedrooms.toString());
-        params.set('numBathrooms', watchedValues.numBathrooms.toString());
+        params.set('sqMetersMin', watchedValues.sqMeters[0].toString());
+        params.set('sqMetersMax', watchedValues.sqMeters[1].toString());
+        params.set('numWindowsMin', watchedValues.numWindows[0].toString());
+        params.set('numWindowsMax', watchedValues.numWindows[1].toString());
+        params.set('totalWindowSizeMin', watchedValues.totalWindowSize[0].toString());
+        params.set('totalWindowSizeMax', watchedValues.totalWindowSize[1].toString());
+        params.set('numBedroomsMin', watchedValues.numBedrooms[0].toString());
+        params.set('numBedroomsMax', watchedValues.numBedrooms[1].toString());
+        params.set('numBathroomsMin', watchedValues.numBathrooms[0].toString());
+        params.set('numBathroomsMax', watchedValues.numBathrooms[1].toString());
         
         if (watchedValues.windowDirections.length > 0) {
           params.set('windowDirections', watchedValues.windowDirections.join(','));
         }
-        
-        if (watchedValues.hasDishwasher) {
-          params.set('hasDishwasher', 'true');
-        }
-        
-        if (watchedValues.hasWasher) {
-          params.set('hasWasher', 'true');
-        }
-        
-        if (watchedValues.hasDryer) {
-          params.set('hasDryer', 'true');
-        }
+        if (watchedValues.hasDishwasher) params.set('hasDishwasher', 'true');
+        if (watchedValues.hasWasher) params.set('hasWasher', 'true');
+        if (watchedValues.hasDryer) params.set('hasDryer', 'true');
 
-        const response = await fetch(`/api/apartments/count?${params}`);
+        const response = await fetch(`/api/apartments/count?${params.toString()}`);
         const data = await response.json();
-        
         onApartmentCountChange(data.count);
-        
-        // Update individual counts for display
-        setApartmentCounts(prev => ({
-          ...prev,
-          overall: data.count,
-        }));
       } catch (error) {
-        console.error('Error updating apartment counts:', error);
+        console.error('Error updating overall apartment count:', error);
       }
     };
-
-    updateCounts();
+    updateOverallCount();
   }, [watchedValues, onApartmentCountChange]);
 
   const onSubmit = async (data: FormData) => {
@@ -150,29 +250,19 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       });
       return;
     }
-
     setIsSubmitting(true);
-
     try {
-      // Separate name and allowRoommates from the rest of the data
       const { name, allowRoommates, ...preferences } = data;
-      
-      // Encrypt the preferences
       const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey);
-      
-      // Submit to server
       await apiRequest("POST", "/api/submit-preferences", {
         name,
         allowRoommates,
         encryptedData,
       });
-
       toast({
         title: "Success",
         description: "Your preferences have been submitted successfully!",
       });
-
-      // Reset form
       form.reset();
     } catch (error: any) {
       toast({
@@ -186,11 +276,16 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   };
 
   const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
+    const hours = Math.floor(minutes / 60) % 24; // Ensure hours are within 0-23 range
     const mins = minutes % 60;
     const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+    const displayHours = hours % 12 === 0 ? 12 : hours % 12;
     return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const renderCountBadge = (count: number | null) => {
+    if (count === null) return <Badge variant="outline">Loading...</Badge>;
+    return <Badge variant="outline" className="text-green-600 border-green-600">{count} apartments match</Badge>;
   };
 
   return (
@@ -251,14 +346,12 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             <div className="md:col-span-2 space-y-4">
               <div className="flex justify-between items-center">
                 <Label>Square Meters</Label>
-                <Badge variant="outline" className="text-green-600 border-green-600">
-                  {apartmentCounts.overall || 0} apartments match
-                </Badge>
+                {renderCountBadge(individualCounts.sqMeters)}
               </div>
               <div className="space-y-2">
                 <Slider
-                  value={[watchedValues.sqMeters]}
-                  onValueChange={(value) => form.setValue("sqMeters", value[0])}
+                  value={watchedValues.sqMeters}
+                  onValueChange={(value) => form.setValue("sqMeters", value as [number, number])}
                   min={20}
                   max={150}
                   step={5}
@@ -266,9 +359,12 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                 />
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>20m²</span>
-                  <span className="font-medium text-slate-700">{watchedValues.sqMeters}m²</span>
+                  <span className="font-medium text-slate-700">{watchedValues.sqMeters[0]}m² - {watchedValues.sqMeters[1]}m²</span>
                   <span>150m²</span>
                 </div>
+                 {form.formState.errors.sqMeters && (
+                  <p className="text-sm text-red-600">{(form.formState.errors.sqMeters as any).message || form.formState.errors.sqMeters?.[0]?.message || form.formState.errors.sqMeters?.[1]?.message}</p>
+                )}
               </div>
             </div>
             <div className="space-y-2">
@@ -290,11 +386,14 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           {/* Number of Windows */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="md:col-span-2 space-y-4">
-              <Label>Number of Windows</Label>
+              <div className="flex justify-between items-center">
+                <Label>Number of Windows</Label>
+                {renderCountBadge(individualCounts.numWindows)}
+              </div>
               <div className="space-y-2">
                 <Slider
-                  value={[watchedValues.numWindows]}
-                  onValueChange={(value) => form.setValue("numWindows", value[0])}
+                  value={watchedValues.numWindows}
+                  onValueChange={(value) => form.setValue("numWindows", value as [number, number])}
                   min={1}
                   max={12}
                   step={1}
@@ -302,9 +401,12 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                 />
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>1</span>
-                  <span className="font-medium text-slate-700">{watchedValues.numWindows} windows</span>
+                  <span className="font-medium text-slate-700">{watchedValues.numWindows[0]} - {watchedValues.numWindows[1]} windows</span>
                   <span>12</span>
                 </div>
+                {form.formState.errors.numWindows && (
+                  <p className="text-sm text-red-600">{(form.formState.errors.numWindows as any).message || form.formState.errors.numWindows?.[0]?.message || form.formState.errors.numWindows?.[1]?.message}</p>
+                )}
               </div>
             </div>
             <div className="space-y-2">
@@ -326,10 +428,13 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           {/* Window Directions */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="md:col-span-2 space-y-4">
-              <Label>Window Directions (AND contains)</Label>
-              <div className="grid grid-cols-4 gap-3">
-                {windowDirections.map((direction) => (
-                  <label key={direction} className="flex items-center space-x-2 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+              <div className="flex justify-between items-center">
+                <Label>Window Directions (AND contains)</Label>
+                {renderCountBadge(individualCounts.windowDirections)}
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {windowDirectionsOptions.map((direction) => (
+                  <label key={direction} className="flex items-center space-x-2 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
                     <Checkbox
                       checked={watchedValues.windowDirections.includes(direction)}
                       onCheckedChange={(checked) => {
@@ -365,11 +470,14 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           {/* Total Window Size */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div className="md:col-span-2 space-y-4">
-              <Label>Total Window Size</Label>
+              <div className="flex justify-between items-center">
+                <Label>Total Window Size</Label>
+                {renderCountBadge(individualCounts.totalWindowSize)}
+              </div>
               <div className="space-y-2">
                 <Slider
-                  value={[watchedValues.totalWindowSize]}
-                  onValueChange={(value) => form.setValue("totalWindowSize", value[0])}
+                  value={watchedValues.totalWindowSize}
+                  onValueChange={(value) => form.setValue("totalWindowSize", value as [number, number])}
                   min={2}
                   max={25}
                   step={1}
@@ -377,9 +485,12 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                 />
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>2m²</span>
-                  <span className="font-medium text-slate-700">{watchedValues.totalWindowSize}m²</span>
+                  <span className="font-medium text-slate-700">{watchedValues.totalWindowSize[0]}m² - {watchedValues.totalWindowSize[1]}m²</span>
                   <span>25m²</span>
                 </div>
+                {form.formState.errors.totalWindowSize && (
+                  <p className="text-sm text-red-600">{(form.formState.errors.totalWindowSize as any).message || form.formState.errors.totalWindowSize?.[0]?.message || form.formState.errors.totalWindowSize?.[1]?.message}</p>
+                )}
               </div>
             </div>
             <div className="space-y-2">
@@ -399,105 +510,126 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           </div>
 
           {/* Bedrooms and Bathrooms */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-8">
+            {/* Number of Bedrooms */}
             <div className="grid grid-cols-3 gap-4 items-end">
-              <div className="col-span-2 space-y-4">
-                <Label>Number of Bedrooms</Label>
+                <div className="col-span-2 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <Label>Number of Bedrooms</Label>
+                        {renderCountBadge(individualCounts.numBedrooms)}
+                    </div>
+                    <div className="space-y-2">
+                        <Slider
+                            value={watchedValues.numBedrooms}
+                            onValueChange={(value) => form.setValue("numBedrooms", value as [number, number])}
+                            min={1}
+                            max={5}
+                            step={1}
+                            className="w-full"
+                        />
+                        <div className="flex justify-between text-xs text-slate-500">
+                            <span>1</span>
+                            <span className="font-medium text-slate-700">{watchedValues.numBedrooms[0]} - {watchedValues.numBedrooms[1]}</span>
+                            <span>5</span>
+                        </div>
+                        {form.formState.errors.numBedrooms && (
+                          <p className="text-sm text-red-600">{(form.formState.errors.numBedrooms as any).message || form.formState.errors.numBedrooms?.[0]?.message || form.formState.errors.numBedrooms?.[1]?.message}</p>
+                        )}
+                    </div>
+                </div>
                 <div className="space-y-2">
-                  <Slider
-                    value={[watchedValues.numBedrooms]}
-                    onValueChange={(value) => form.setValue("numBedrooms", value[0])}
-                    min={1}
-                    max={5}
-                    step={1}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500">
-                    <span>1</span>
-                    <span className="font-medium text-slate-700">{watchedValues.numBedrooms}</span>
-                    <span>5</span>
-                  </div>
+                    <Label className="text-xs whitespace-nowrap">Worth if missing</Label>
+                    <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
+                        <Input
+                            type="number"
+                            {...form.register("numBedroomsWorth", { valueAsNumber: true })}
+                            className="pl-8 text-sm h-9"
+                            placeholder="0"
+                            min={0}
+                            step={10}
+                        />
+                    </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
-                  <Input
-                    type="number"
-                    {...form.register("numBedroomsWorth", { valueAsNumber: true })}
-                    className="pl-8 text-sm"
-                    placeholder="0"
-                    min={0}
-                    step={10}
-                  />
-                </div>
-              </div>
             </div>
 
+            {/* Number of Bathrooms */}
             <div className="grid grid-cols-3 gap-4 items-end">
-              <div className="col-span-2 space-y-4">
-                <Label>Number of Bathrooms</Label>
+                <div className="col-span-2 space-y-4">
+                    <div className="flex justify-between items-center">
+                        <Label>Number of Bathrooms</Label>
+                        {renderCountBadge(individualCounts.numBathrooms)}
+                    </div>
+                    <div className="space-y-2">
+                        <Slider
+                            value={watchedValues.numBathrooms}
+                            onValueChange={(value) => form.setValue("numBathrooms", value as [number, number])}
+                            min={1}
+                            max={4}
+                            step={1}
+                            className="w-full"
+                        />
+                        <div className="flex justify-between text-xs text-slate-500">
+                            <span>1</span>
+                            <span className="font-medium text-slate-700">{watchedValues.numBathrooms[0]} - {watchedValues.numBathrooms[1]}</span>
+                            <span>4</span>
+                        </div>
+                        {form.formState.errors.numBathrooms && (
+                          <p className="text-sm text-red-600">{(form.formState.errors.numBathrooms as any).message || form.formState.errors.numBathrooms?.[0]?.message || form.formState.errors.numBathrooms?.[1]?.message}</p>
+                        )}
+                    </div>
+                </div>
                 <div className="space-y-2">
-                  <Slider
-                    value={[watchedValues.numBathrooms]}
-                    onValueChange={(value) => form.setValue("numBathrooms", value[0])}
-                    min={1}
-                    max={4}
-                    step={1}
-                    className="w-full"
-                  />
-                  <div className="flex justify-between text-xs text-slate-500">
-                    <span>1</span>
-                    <span className="font-medium text-slate-700">{watchedValues.numBathrooms}</span>
-                    <span>4</span>
-                  </div>
+                    <Label className="text-xs whitespace-nowrap">Worth if missing</Label>
+                    <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
+                        <Input
+                            type="number"
+                            {...form.register("numBathroomsWorth", { valueAsNumber: true })}
+                            className="pl-8 text-sm h-9"
+                            placeholder="0"
+                            min={0}
+                            step={10}
+                        />
+                    </div>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
-                  <Input
-                    type="number"
-                    {...form.register("numBathroomsWorth", { valueAsNumber: true })}
-                    className="pl-8 text-sm"
-                    placeholder="0"
-                    min={0}
-                    step={10}
-                  />
-                </div>
-              </div>
             </div>
           </div>
+
 
           {/* Amenities */}
           <div className="space-y-4">
             <Label className="text-base font-medium">Amenities</Label>
             <div className="space-y-4">
               {[
-                { key: "hasDishwasher", worthKey: "dishwasherWorth", label: "Includes Dishwasher" },
-                { key: "hasWasher", worthKey: "washerWorth", label: "Includes Washer" },
-                { key: "hasDryer", worthKey: "dryerWorth", label: "Includes Dryer" },
-              ].map(({ key, worthKey, label }) => (
+                { key: "hasDishwasher", worthKey: "dishwasherWorth", label: "Includes Dishwasher", count: individualCounts.hasDishwasher },
+                { key: "hasWasher", worthKey: "washerWorth", label: "Includes Washer", count: individualCounts.hasWasher },
+                { key: "hasDryer", worthKey: "dryerWorth", label: "Includes Dryer", count: individualCounts.hasDryer },
+              ].map(({ key, worthKey, label, count }) => (
                 <div key={key} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-                  <div className="md:col-span-2">
-                    <label className="flex items-center space-x-3 cursor-pointer">
+                  <div className="md:col-span-2 flex justify-between items-center">
+                    <label className="flex items-center space-x-3 cursor-pointer has-[:checked]:text-primary">
                       <Checkbox
                         checked={watchedValues[key as keyof FormData] as boolean}
                         onCheckedChange={(checked) => form.setValue(key as any, checked)}
                       />
                       <span className="text-sm">{label}</span>
                     </label>
+                    {renderCountBadge(count)}
                   </div>
-                  <div className="relative">
-                    <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
-                    <Input
-                      type="number"
-                      {...form.register(worthKey as any, { valueAsNumber: true })}
-                      className="pl-8 text-sm"
-                      placeholder="0"
-                      min={0}
-                      step={10}
-                    />
+                  <div className="space-y-2">
+                    <Label className="text-xs whitespace-nowrap">Worth if missing</Label>
+                    <div className="relative">
+                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
+                        <Input
+                        type="number"
+                        {...form.register(worthKey as any, { valueAsNumber: true })}
+                        className="pl-8 text-sm h-9"
+                        placeholder="0"
+                        min={0}
+                        step={10}
+                        />
+                    </div>
                   </div>
                 </div>
               ))}
@@ -522,19 +654,19 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       {/* Submit Button */}
       <Card className="bg-gradient-to-r from-primary to-blue-700 text-white">
         <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold mb-2">Ready to Submit Your Preferences?</h3>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-center sm:text-left">
+              <h3 className="text-lg font-semibold mb-1 sm:mb-2">Ready to Submit Your Preferences?</h3>
               <p className="text-blue-100 text-sm">
                 Your detailed preferences will be encrypted before submission to protect your privacy.
               </p>
             </div>
             <Button 
               type="submit" 
-              disabled={isSubmitting}
+              disabled={isSubmitting || !form.formState.isValid && form.formState.isSubmitted}
               variant="secondary"
               size="lg"
-              className="bg-white text-primary hover:bg-blue-50"
+              className="bg-white text-primary hover:bg-blue-50 w-full sm:w-auto"
             >
               {isSubmitting ? (
                 <>
@@ -549,6 +681,9 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               )}
             </Button>
           </div>
+           {!form.formState.isValid && form.formState.isSubmitted && (
+             <p className="text-sm text-red-200 mt-2 text-center sm:text-right">Please correct the errors above before submitting.</p>
+           )}
         </CardContent>
       </Card>
     </form>

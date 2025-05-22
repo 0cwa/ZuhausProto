@@ -38,40 +38,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/apartments/count", async (req, res) => {
     try {
       const apartments = await storage.getApartments();
-      
-      // Apply filters from query parameters
       let filteredApartments = apartments;
       
-      if (req.query.sqMeters) {
-        const minSqMeters = parseInt(req.query.sqMeters as string);
-        filteredApartments = filteredApartments.filter(apt => apt.sqMeters >= minSqMeters);
+      // Filter by sqMeters range
+      if (req.query.sqMetersMin && req.query.sqMetersMax) {
+        const min = parseInt(req.query.sqMetersMin as string);
+        const max = parseInt(req.query.sqMetersMax as string);
+        filteredApartments = filteredApartments.filter(apt => apt.sqMeters >= min && apt.sqMeters <= max);
       }
       
-      if (req.query.numWindows) {
-        const minWindows = parseInt(req.query.numWindows as string);
-        filteredApartments = filteredApartments.filter(apt => apt.numWindows >= minWindows);
+      // Filter by numWindows range
+      if (req.query.numWindowsMin && req.query.numWindowsMax) {
+        const min = parseInt(req.query.numWindowsMin as string);
+        const max = parseInt(req.query.numWindowsMax as string);
+        filteredApartments = filteredApartments.filter(apt => apt.numWindows >= min && apt.numWindows <= max);
       }
       
       if (req.query.windowDirections) {
         const directions = (req.query.windowDirections as string).split(',');
-        filteredApartments = filteredApartments.filter(apt => 
-          directions.every(dir => apt.windowDirections.includes(dir))
-        );
+        if (directions.length > 0) {
+            filteredApartments = filteredApartments.filter(apt => 
+              directions.every(dir => apt.windowDirections.includes(dir))
+            );
+        }
       }
       
-      if (req.query.totalWindowSize) {
-        const minWindowSize = parseFloat(req.query.totalWindowSize as string);
-        filteredApartments = filteredApartments.filter(apt => apt.totalWindowSize >= minWindowSize);
+      // Filter by totalWindowSize range
+      if (req.query.totalWindowSizeMin && req.query.totalWindowSizeMax) {
+        const min = parseFloat(req.query.totalWindowSizeMin as string);
+        const max = parseFloat(req.query.totalWindowSizeMax as string);
+        filteredApartments = filteredApartments.filter(apt => apt.totalWindowSize >= min && apt.totalWindowSize <= max);
       }
       
-      if (req.query.numBedrooms) {
-        const minBedrooms = parseInt(req.query.numBedrooms as string);
-        filteredApartments = filteredApartments.filter(apt => apt.numBedrooms >= minBedrooms);
+      // Filter by numBedrooms range
+      if (req.query.numBedroomsMin && req.query.numBedroomsMax) {
+        const min = parseInt(req.query.numBedroomsMin as string);
+        const max = parseInt(req.query.numBedroomsMax as string);
+        filteredApartments = filteredApartments.filter(apt => apt.numBedrooms >= min && apt.numBedrooms <= max);
       }
       
-      if (req.query.numBathrooms) {
-        const minBathrooms = parseInt(req.query.numBathrooms as string);
-        filteredApartments = filteredApartments.filter(apt => apt.numBathrooms >= minBathrooms);
+      // Filter by numBathrooms range
+      if (req.query.numBathroomsMin && req.query.numBathroomsMax) {
+        const min = parseInt(req.query.numBathroomsMin as string);
+        const max = parseInt(req.query.numBathroomsMax as string);
+        filteredApartments = filteredApartments.filter(apt => apt.numBathrooms >= min && apt.numBathrooms <= max);
       }
       
       if (req.query.hasDishwasher === 'true') {
@@ -88,6 +98,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ count: filteredApartments.length });
     } catch (error) {
+      console.error("Error in /api/apartments/count:", error);
       res.status(500).json({ message: "Failed to get apartment count" });
     }
   });

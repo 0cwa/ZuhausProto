@@ -19,17 +19,17 @@ export const apartmentSchema = z.object({
 
 // Person preferences schema
 export const personPreferencesSchema = z.object({
-  sqMeters: z.number(),
+  sqMeters: z.tuple([z.number(), z.number()]), // [min, max]
   sqMetersWorth: z.number().optional(),
-  numWindows: z.number(),
+  numWindows: z.tuple([z.number(), z.number()]), // [min, max]
   numWindowsWorth: z.number().optional(),
   windowDirections: z.array(z.string()),
   windowDirectionsWorth: z.number().optional(),
-  totalWindowSize: z.number(),
+  totalWindowSize: z.tuple([z.number(), z.number()]), // [min, max]
   totalWindowSizeWorth: z.number().optional(),
-  numBedrooms: z.number(),
+  numBedrooms: z.tuple([z.number(), z.number()]), // [min, max]
   numBedroomsWorth: z.number().optional(),
-  numBathrooms: z.number(),
+  numBathrooms: z.tuple([z.number(), z.number()]), // [min, max]
   numBathroomsWorth: z.number().optional(),
   hasDishwasher: z.boolean(),
   dishwasherWorth: z.number().optional(),

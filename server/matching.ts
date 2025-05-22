@@ -25,6 +25,7 @@ export class MatchingEngine {
       const preferences = JSON.parse(decryptedData) as PersonPreferences;
       return { ...person, preferences };
     } catch (error) {
+      console.error(`Failed to decrypt data for person ${person.name}: ${error}`);
       throw new Error(`Failed to decrypt data for person ${person.name}`);
     }
   }
@@ -39,7 +40,6 @@ export class MatchingEngine {
       const val2 = person2.preferences[factor];
       
       if (val1 !== undefined && val2 !== undefined) {
-        // Calculate similarity score (0-100)
         const difference = Math.abs(val1 - val2);
         const similarity = Math.max(0, 100 - difference);
         totalScore += similarity;
@@ -47,17 +47,22 @@ export class MatchingEngine {
       }
     }
 
-    // Check sleep schedule compatibility
     const sleep1 = person1.preferences.sleepTime;
     const sleep2 = person2.preferences.sleepTime;
     const wake1 = person1.preferences.wakeTime;
     const wake2 = person2.preferences.wakeTime;
 
-    if (sleep1 && sleep2 && wake1 && wake2) {
-      const sleepDiff = Math.abs(sleep1 - sleep2);
-      const wakeDiff = Math.abs(wake1 - wake2);
-      const scheduleCompatibility = Math.max(0, 100 - (sleepDiff + wakeDiff) / 2);
-      totalScore += scheduleCompatibility;
+    if (sleep1 !== undefined && sleep2 !== undefined && wake1 !== undefined && wake2 !== undefined) {
+      // Time is in minutes from midnight. Max difference is 12 hours (720 minutes).
+      // Consider circular nature of time for sleep/wake.
+      const sleepDiff = Math.min(Math.abs(sleep1 - sleep2), 1440 - Math.abs(sleep1 - sleep2));
+      const wakeDiff = Math.min(Math.abs(wake1 - wake2), 1440 - Math.abs(wake1 - wake2));
+      
+      // Max penalty if 6 hours (360 min) apart for each, scaled to 100
+      const sleepCompatibility = Math.max(0, 100 - (sleepDiff / 360) * 100);
+      const wakeCompatibility = Math.max(0, 100 - (wakeDiff / 360) * 100);
+      
+      totalScore += (sleepCompatibility + wakeCompatibility) / 2;
       validFactors++;
     }
 
@@ -66,18 +71,14 @@ export class MatchingEngine {
 
   private canShareApartment(people: DecodedPerson[], apartment: Apartment): boolean {
     if (people.length > apartment.numBedrooms) return false;
-    
-    // Check if all people allow roommates (except for single occupancy)
     if (people.length > 1 && !people.every(p => p.allowRoommates)) return false;
-    
     return true;
   }
 
   private formRoommateGroups(people: DecodedPerson[]): RoommateGroup[] {
     const groups: RoommateGroup[] = [];
-    const compatibilityThreshold = 60; // Minimum compatibility score
+    const compatibilityThreshold = 60; 
 
-    // Add individuals as single-person groups
     people.forEach(person => {
       groups.push({
         members: [person],
@@ -86,7 +87,6 @@ export class MatchingEngine {
       });
     });
 
-    // Form pairs
     for (let i = 0; i < people.length; i++) {
       for (let j = i + 1; j < people.length; j++) {
         const person1 = people[i];
@@ -96,23 +96,21 @@ export class MatchingEngine {
         
         const compatibility = this.calculateInterpersonalCompatibility(person1, person2);
         if (compatibility >= compatibilityThreshold) {
-          const maxRoommates1 = person1.preferences.maxRoommates || 1;
-          const maxRoommates2 = person2.preferences.maxRoommates || 1;
+          const maxRoommates1 = person1.preferences.maxRoommates === undefined ? 1 : person1.preferences.maxRoommates;
+          const maxRoommates2 = person2.preferences.maxRoommates === undefined ? 1 : person2.preferences.maxRoommates;
           
-          if (maxRoommates1 >= 1 && maxRoommates2 >= 1) {
+          if (maxRoommates1 >= 1 && maxRoommates2 >= 1) { // Each must be willing to have at least 1 other roommate (themselves + this person)
             groups.push({
               members: [person1, person2],
               compatibility,
-              maxSize: Math.min(maxRoommates1 + 1, maxRoommates2 + 1),
+              maxSize: Math.min(maxRoommates1 + 1, maxRoommates2 + 1), // Total size of group they'd accept
             });
           }
         }
       }
     }
-
-    // Form larger groups (3-5 people)
-    const allowRoommatesPeople = people.filter(p => p.allowRoommates);
     
+    const allowRoommatesPeople = people.filter(p => p.allowRoommates);
     for (let size = 3; size <= 5; size++) {
       this.generateCombinations(allowRoommatesPeople, size).forEach(combination => {
         let totalCompatibility = 0;
@@ -120,12 +118,11 @@ export class MatchingEngine {
         let canFormGroup = true;
         let minMaxSize = size;
 
-        // Check all pairs within the group
         for (let i = 0; i < combination.length && canFormGroup; i++) {
-          const maxRoommates = combination[i].preferences.maxRoommates || 1;
+          const maxRoommates = combination[i].preferences.maxRoommates === undefined ? 1 : combination[i].preferences.maxRoommates;
           minMaxSize = Math.min(minMaxSize, maxRoommates + 1);
           
-          if (maxRoommates < size - 1) {
+          if (maxRoommates < size - 1) { // Max other roommates must be at least group size - 1
             canFormGroup = false;
             break;
           }
@@ -155,8 +152,10 @@ export class MatchingEngine {
   }
 
   private generateCombinations<T>(array: T[], size: number): T[][] {
+    if (size === 0) return [[]];
+    if (size < 0 || size > array.length) return [];
+    if (size === array.length) return [array];
     if (size === 1) return array.map(item => [item]);
-    if (size > array.length) return [];
     
     const combinations: T[][] = [];
     for (let i = 0; i <= array.length - size; i++) {
@@ -194,40 +193,30 @@ export class MatchingEngine {
   private calculateCharacteristicDeduction(preferences: PersonPreferences, apartment: Apartment): number {
     let deduction = 0;
 
-    // Square meters
-    if (apartment.sqMeters < preferences.sqMeters) {
-      deduction += preferences.sqMetersWorth || 0;
+    const checkRange = (value: number, prefRange: [number, number] | undefined, worth: number | undefined) => {
+      if (prefRange && prefRange.length === 2) {
+        const [minPref, maxPref] = prefRange;
+        if (value < minPref || value > maxPref) {
+          deduction += worth || 0;
+        }
+      }
+    };
+
+    checkRange(apartment.sqMeters, preferences.sqMeters, preferences.sqMetersWorth);
+    checkRange(apartment.numWindows, preferences.numWindows, preferences.numWindowsWorth);
+    checkRange(apartment.totalWindowSize, preferences.totalWindowSize, preferences.totalWindowSizeWorth);
+    checkRange(apartment.numBedrooms, preferences.numBedrooms, preferences.numBedroomsWorth);
+    checkRange(apartment.numBathrooms, preferences.numBathrooms, preferences.numBathroomsWorth);
+
+    if (preferences.windowDirections && preferences.windowDirections.length > 0) {
+      const hasAllDirections = preferences.windowDirections.every(dir => 
+        apartment.windowDirections.includes(dir)
+      );
+      if (!hasAllDirections) {
+        deduction += preferences.windowDirectionsWorth || 0;
+      }
     }
 
-    // Number of windows
-    if (apartment.numWindows < preferences.numWindows) {
-      deduction += preferences.numWindowsWorth || 0;
-    }
-
-    // Window directions (AND logic)
-    const hasAllDirections = preferences.windowDirections.every(dir => 
-      apartment.windowDirections.includes(dir)
-    );
-    if (!hasAllDirections) {
-      deduction += preferences.windowDirectionsWorth || 0;
-    }
-
-    // Total window size
-    if (apartment.totalWindowSize < preferences.totalWindowSize) {
-      deduction += preferences.totalWindowSizeWorth || 0;
-    }
-
-    // Number of bedrooms
-    if (apartment.numBedrooms < preferences.numBedrooms) {
-      deduction += preferences.numBedroomsWorth || 0;
-    }
-
-    // Number of bathrooms
-    if (apartment.numBathrooms < preferences.numBathrooms) {
-      deduction += preferences.numBathroomsWorth || 0;
-    }
-
-    // Amenities
     if (preferences.hasDishwasher && !apartment.hasDishwasher) {
       deduction += preferences.dishwasherWorth || 0;
     }
@@ -242,31 +231,22 @@ export class MatchingEngine {
   }
 
   async runMatching(people: Person[], apartments: Apartment[]): Promise<MatchingResult[]> {
-    // Decrypt all person data
     const decodedPeople = people.map(person => this.decryptPersonData(person));
-    
-    // Form roommate groups
     const groups = this.formRoommateGroups(decodedPeople);
     
-    // Create a copy of apartments to track availability
-    const availableApartments = apartments.map(apt => ({ ...apt }));
+    const availableApartments = apartments.map(apt => ({ ...apt, currentTenants: apt.tenants })); // Use currentTenants for matching session
     const results: MatchingResult[] = [];
-    const assignedPeople = new Set<string>();
+    const assignedPeopleIds = new Set<string>();
 
-    // Create bids for all apartment-bidder combinations
     const allBids: ApartmentBid[] = [];
     
     availableApartments.forEach(apartment => {
       groups.forEach(group => {
-        // Skip if group members are already assigned
-        if (group.members.some(member => assignedPeople.has(member.id))) return;
-        
-        // Check if group can fit in apartment
+        if (group.members.some(member => assignedPeopleIds.has(member.id))) return;
         if (!this.canShareApartment(group.members, apartment)) return;
-        
-        // Check if apartment has space
-        if (apartment.tenants + group.members.length > apartment.numBedrooms) return;
-        
+        if (apartment.currentTenants + group.members.length > apartment.numBedrooms) return; // Check against numBedrooms
+        if (group.members.length > group.maxSize) return; // Group willing to be this size
+
         const effectiveBid = this.calculateEffectiveBid(group, apartment, group.members.length > 1);
         
         if (effectiveBid > 0) {
@@ -280,76 +260,49 @@ export class MatchingEngine {
       });
     });
 
-    // Sort bids by effective bid amount (highest first)
     allBids.sort((a, b) => b.effectiveBid - a.effectiveBid);
 
-    // Process bids in order
     while (allBids.length > 0) {
-      // Find apartment with highest demand
-      const apartmentDemand = new Map<string, ApartmentBid[]>();
-      
-      allBids.forEach(bid => {
-        const aptId = bid.apartment.id;
-        if (!apartmentDemand.has(aptId)) {
-          apartmentDemand.set(aptId, []);
-        }
-        apartmentDemand.get(aptId)!.push(bid);
-      });
+      const highestBid = allBids.shift(); // Get and remove the current highest bid
+      if (!highestBid) break;
 
-      // Find apartment with most demand that still has space
-      let selectedApartment: string | null = null;
-      let maxDemand = 0;
+      const { apartment: targetApartment, bidder, effectiveBid } = highestBid;
+      const group = bidder as RoommateGroup;
 
-      for (const [aptId, bids] of apartmentDemand.entries()) {
-        const apartment = availableApartments.find(apt => apt.id === aptId);
-        if (apartment && apartment.tenants < apartment.numBedrooms && bids.length > maxDemand) {
-          maxDemand = bids.length;
-          selectedApartment = aptId;
-        }
+      // Check if apartment still available and bidder members not yet assigned
+      const apartmentInSystem = availableApartments.find(a => a.id === targetApartment.id);
+      if (!apartmentInSystem || apartmentInSystem.currentTenants + group.members.length > apartmentInSystem.numBedrooms) {
+        continue; // Apartment taken or no longer fits this group
+      }
+      if (group.members.some(member => assignedPeopleIds.has(member.id))) {
+        continue; // Member(s) already assigned
+      }
+       if (group.members.length > group.maxSize) {
+        continue; 
       }
 
-      if (!selectedApartment) break;
 
-      // Get bids for selected apartment
-      const apartmentBids = apartmentDemand.get(selectedApartment)!;
-      
-      // Filter out bids from already assigned people
-      const validBids = apartmentBids.filter(bid => {
-        const group = bid.bidder as RoommateGroup;
-        return !group.members.some(member => assignedPeople.has(member.id));
-      });
+      // Determine payment (simplified: could be second-price auction logic here)
+      // For now, let's assume they pay their effective bid or a portion of it.
+      // A more complex auction (Vickrey-Clarke-Groves) would be needed for true second-price with groups.
+      // Simplified: they pay their bid, split proportionally.
+      const paymentAmount = effectiveBid; 
 
-      if (validBids.length === 0) {
-        // Remove all bids for this apartment and continue
-        allBids.splice(0, allBids.length, ...allBids.filter(bid => bid.apartment.id !== selectedApartment));
-        continue;
-      }
-
-      // Sort valid bids by effective bid (highest first)
-      validBids.sort((a, b) => b.effectiveBid - a.effectiveBid);
-
-      const winningBid = validBids[0];
-      const secondHighestBid = validBids[1];
-      const paymentAmount = secondHighestBid ? secondHighestBid.effectiveBid : winningBid.effectiveBid;
-
-      // Assign the apartment
-      const group = winningBid.bidder as RoommateGroup;
-      const apartment = availableApartments.find(apt => apt.id === selectedApartment)!;
-
-      // Calculate individual payments
       const assignedPeopleInfo = group.members.map(member => {
         let individualPayment: number;
-        
         if (group.members.length === 1) {
           individualPayment = paymentAmount;
         } else {
-          // Distribute payment based on proportion of original bid
           const totalOriginalBid = group.members.reduce((sum, m) => sum + m.preferences.bidAmount, 0);
-          const memberProportion = member.preferences.bidAmount / totalOriginalBid;
-          individualPayment = Math.round(paymentAmount * memberProportion);
+          if (totalOriginalBid === 0) { // Avoid division by zero if all bids are 0 (unlikely with positive effective bid)
+             individualPayment = Math.round(paymentAmount / group.members.length);
+          } else {
+            const memberProportion = member.preferences.bidAmount / totalOriginalBid;
+            individualPayment = Math.round(paymentAmount * memberProportion);
+          }
         }
         
-        assignedPeople.add(member.id);
+        assignedPeopleIds.add(member.id);
         return {
           id: member.id,
           name: member.name,
@@ -357,29 +310,26 @@ export class MatchingEngine {
         };
       });
 
-      // Update apartment occupancy
-      apartment.tenants += group.members.length;
-      if (apartment.tenants >= apartment.numBedrooms) {
-        apartment.allowRoommates = false;
-      }
+      apartmentInSystem.currentTenants += group.members.length;
+      // apartmentInSystem.allowRoommates = apartmentInSystem.currentTenants < apartmentInSystem.numBedrooms; // This should be based on original capacity
 
-      // Create result
       results.push({
-        apartmentId: apartment.id,
-        apartmentName: apartment.name,
+        apartmentId: apartmentInSystem.id,
+        apartmentName: apartmentInSystem.name,
         assignedPeople: assignedPeopleInfo,
-        totalPayment: paymentAmount,
-        tenants: apartment.tenants,
-        capacity: apartment.numBedrooms,
+        totalPayment: paymentAmount, // This is the group's total payment for this iteration
+        tenants: apartmentInSystem.currentTenants,
+        capacity: apartmentInSystem.numBedrooms, // Original capacity
       });
 
-      // Remove all bids involving assigned people
-      allBids.splice(0, allBids.length, ...allBids.filter(bid => {
-        const group = bid.bidder as RoommateGroup;
-        return !group.members.some(member => assignedPeople.has(member.id));
-      }));
+      // Remove bids from people who are now assigned
+      for (let i = allBids.length - 1; i >= 0; i--) {
+        const currentBidGroup = allBids[i].bidder as RoommateGroup;
+        if (currentBidGroup.members.some(m => assignedPeopleIds.has(m.id))) {
+          allBids.splice(i, 1);
+        }
+      }
     }
-
     return results;
   }
 }
