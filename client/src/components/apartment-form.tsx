@@ -58,7 +58,7 @@ interface ApartmentFormProps {
   onApartmentCountChange: (count: number) => void;
 }
 
-const windowDirectionsOptions = ["N", "S", "E", "W"];
+const windowDirectionsOptions = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
 
 interface IndividualCountState {
   sqMeters: number | null;
@@ -126,12 +126,17 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
 
   const fetchIndividualCount = useCallback(async (field: keyof IndividualCountState, params: URLSearchParams) => {
     try {
+      // Add cache-busting parameter
+      params.set('_cb', new Date().getTime().toString());
       const response = await fetch(`/api/apartments/count?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
       const data = await response.json();
       setIndividualCounts(prev => ({ ...prev, [field]: data.count }));
     } catch (error) {
       console.error(`Error fetching count for ${field}:`, error);
-      setIndividualCounts(prev => ({ ...prev, [field]: null }));
+      setIndividualCounts(prev => ({ ...prev, [field]: null })); // Set to null on error to show loading/error
     }
   }, []);
 
@@ -153,14 +158,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     const params = new URLSearchParams();
     if (watchedValues.windowDirections.length > 0) {
       params.set('windowDirections', watchedValues.windowDirections.join(','));
-    } else {
-      // If no directions selected, effectively don't filter by it for its individual count
-      // or send a param that the backend understands as "all" for this specific criteria.
-      // For simplicity, if empty, the backend won't filter by it.
-      // To get a "true" individual count, we might need to fetch all if empty.
-      // For now, if empty, it will show total apartments.
-      // A better approach might be to not call if empty, or handle it specifically.
-      // Let's assume an empty directions array means "don't care" for this specific filter.
     }
     fetchIndividualCount('windowDirections', params);
   }, [watchedValues.windowDirections, fetchIndividualCount]);
@@ -188,22 +185,27 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   
   useEffect(() => {
     const params = new URLSearchParams();
-    if (watchedValues.hasDishwasher) params.set('hasDishwasher', 'true');
-    // If false, we want count of ALL apartments, or apartments that DONT have it.
-    // For "matches this criteria", if false, it means "I don't require it".
-    // The count should reflect apartments that meet the "true" state.
+    // Only send the parameter if the checkbox is checked, to count apartments WITH the feature.
+    // If unchecked, an empty params means "all apartments match this lack of preference for this specific counter"
+    if (watchedValues.hasDishwasher) {
+        params.set('hasDishwasher', 'true');
+    }
     fetchIndividualCount('hasDishwasher', params);
   }, [watchedValues.hasDishwasher, fetchIndividualCount]);
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (watchedValues.hasWasher) params.set('hasWasher', 'true');
+    if (watchedValues.hasWasher) {
+        params.set('hasWasher', 'true');
+    }
     fetchIndividualCount('hasWasher', params);
   }, [watchedValues.hasWasher, fetchIndividualCount]);
 
   useEffect(() => {
     const params = new URLSearchParams();
-    if (watchedValues.hasDryer) params.set('hasDryer', 'true');
+    if (watchedValues.hasDryer) {
+        params.set('hasDryer', 'true');
+    }
     fetchIndividualCount('hasDryer', params);
   }, [watchedValues.hasDryer, fetchIndividualCount]);
 
@@ -230,16 +232,21 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         if (watchedValues.hasDishwasher) params.set('hasDishwasher', 'true');
         if (watchedValues.hasWasher) params.set('hasWasher', 'true');
         if (watchedValues.hasDryer) params.set('hasDryer', 'true');
-
+        
+        params.set('_cb', new Date().getTime().toString()); // Cache buster for overall count too
         const response = await fetch(`/api/apartments/count?${params.toString()}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         const data = await response.json();
         onApartmentCountChange(data.count);
       } catch (error) {
         console.error('Error updating overall apartment count:', error);
+        // Optionally set overall count to null or an error state
       }
     };
     updateOverallCount();
-  }, [watchedValues, onApartmentCountChange]);
+  }, [watchedValues, onApartmentCountChange, fetchIndividualCount]); // Added fetchIndividualCount to dep array if it's used indirectly
 
   const onSubmit = async (data: FormData) => {
     if (!serverPublicKey) {
