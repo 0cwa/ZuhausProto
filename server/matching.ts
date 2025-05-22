@@ -47,22 +47,31 @@ export class MatchingEngine {
       }
     }
 
-    const sleep1 = person1.preferences.sleepTime;
-    const sleep2 = person2.preferences.sleepTime;
+    const sleepRange1 = person1.preferences.sleepTime;
+    const sleepRange2 = person2.preferences.sleepTime;
     const wake1 = person1.preferences.wakeTime;
     const wake2 = person2.preferences.wakeTime;
 
-    if (sleep1 !== undefined && sleep2 !== undefined && wake1 !== undefined && wake2 !== undefined) {
-      // Time is in minutes from midnight. Max difference is 12 hours (720 minutes).
-      // Consider circular nature of time for sleep/wake.
-      const sleepDiff = Math.min(Math.abs(sleep1 - sleep2), 1440 - Math.abs(sleep1 - sleep2));
+    // Handle sleep time (now a range)
+    if (sleepRange1 && sleepRange2 && sleepRange1.length === 2 && sleepRange2.length === 2) {
+      const midSleep1 = (sleepRange1[0] + sleepRange1[1]) / 2;
+      const midSleep2 = (sleepRange2[0] + sleepRange2[1]) / 2;
+      
+      // Normalize midpoints to be within a 0-1439 range for comparison if they exceed it due to linear scale
+      const normMidSleep1 = midSleep1 % 1440;
+      const normMidSleep2 = midSleep2 % 1440;
+
+      const sleepDiff = Math.min(Math.abs(normMidSleep1 - normMidSleep2), 1440 - Math.abs(normMidSleep1 - normMidSleep2));
+      const sleepCompatibility = Math.max(0, 100 - (sleepDiff / 360) * 100); // Max penalty if 6 hours (360 min) apart
+      totalScore += sleepCompatibility;
+      validFactors++;
+    }
+
+
+    if (wake1 !== undefined && wake2 !== undefined) {
       const wakeDiff = Math.min(Math.abs(wake1 - wake2), 1440 - Math.abs(wake1 - wake2));
-      
-      // Max penalty if 6 hours (360 min) apart for each, scaled to 100
-      const sleepCompatibility = Math.max(0, 100 - (sleepDiff / 360) * 100);
       const wakeCompatibility = Math.max(0, 100 - (wakeDiff / 360) * 100);
-      
-      totalScore += (sleepCompatibility + wakeCompatibility) / 2;
+      totalScore += wakeCompatibility;
       validFactors++;
     }
 
@@ -99,11 +108,11 @@ export class MatchingEngine {
           const maxRoommates1 = person1.preferences.maxRoommates === undefined ? 1 : person1.preferences.maxRoommates;
           const maxRoommates2 = person2.preferences.maxRoommates === undefined ? 1 : person2.preferences.maxRoommates;
           
-          if (maxRoommates1 >= 1 && maxRoommates2 >= 1) { // Each must be willing to have at least 1 other roommate (themselves + this person)
+          if (maxRoommates1 >= 1 && maxRoommates2 >= 1) { 
             groups.push({
               members: [person1, person2],
               compatibility,
-              maxSize: Math.min(maxRoommates1 + 1, maxRoommates2 + 1), // Total size of group they'd accept
+              maxSize: Math.min(maxRoommates1 + 1, maxRoommates2 + 1), 
             });
           }
         }
@@ -122,7 +131,7 @@ export class MatchingEngine {
           const maxRoommates = combination[i].preferences.maxRoommates === undefined ? 1 : combination[i].preferences.maxRoommates;
           minMaxSize = Math.min(minMaxSize, maxRoommates + 1);
           
-          if (maxRoommates < size - 1) { // Max other roommates must be at least group size - 1
+          if (maxRoommates < size - 1) { 
             canFormGroup = false;
             break;
           }
@@ -209,10 +218,11 @@ export class MatchingEngine {
     checkRange(apartment.numBathrooms, preferences.numBathrooms, preferences.numBathroomsWorth);
 
     if (preferences.windowDirections && preferences.windowDirections.length > 0) {
-      const hasAllDirections = preferences.windowDirections.every(dir => 
+      // Logic changed to OR: if apartment does NOT have AT LEAST ONE of the preferred directions
+      const hasAtLeastOneDirection = preferences.windowDirections.some(dir => 
         apartment.windowDirections.includes(dir)
       );
-      if (!hasAllDirections) {
+      if (!hasAtLeastOneDirection) {
         deduction += preferences.windowDirectionsWorth || 0;
       }
     }
@@ -234,7 +244,7 @@ export class MatchingEngine {
     const decodedPeople = people.map(person => this.decryptPersonData(person));
     const groups = this.formRoommateGroups(decodedPeople);
     
-    const availableApartments = apartments.map(apt => ({ ...apt, currentTenants: apt.tenants })); // Use currentTenants for matching session
+    const availableApartments = apartments.map(apt => ({ ...apt, currentTenants: apt.tenants })); 
     const results: MatchingResult[] = [];
     const assignedPeopleIds = new Set<string>();
 
@@ -244,8 +254,8 @@ export class MatchingEngine {
       groups.forEach(group => {
         if (group.members.some(member => assignedPeopleIds.has(member.id))) return;
         if (!this.canShareApartment(group.members, apartment)) return;
-        if (apartment.currentTenants + group.members.length > apartment.numBedrooms) return; // Check against numBedrooms
-        if (group.members.length > group.maxSize) return; // Group willing to be this size
+        if (apartment.currentTenants + group.members.length > apartment.numBedrooms) return; 
+        if (group.members.length > group.maxSize) return;
 
         const effectiveBid = this.calculateEffectiveBid(group, apartment, group.members.length > 1);
         
@@ -263,29 +273,23 @@ export class MatchingEngine {
     allBids.sort((a, b) => b.effectiveBid - a.effectiveBid);
 
     while (allBids.length > 0) {
-      const highestBid = allBids.shift(); // Get and remove the current highest bid
+      const highestBid = allBids.shift(); 
       if (!highestBid) break;
 
       const { apartment: targetApartment, bidder, effectiveBid } = highestBid;
       const group = bidder as RoommateGroup;
 
-      // Check if apartment still available and bidder members not yet assigned
       const apartmentInSystem = availableApartments.find(a => a.id === targetApartment.id);
       if (!apartmentInSystem || apartmentInSystem.currentTenants + group.members.length > apartmentInSystem.numBedrooms) {
-        continue; // Apartment taken or no longer fits this group
+        continue; 
       }
       if (group.members.some(member => assignedPeopleIds.has(member.id))) {
-        continue; // Member(s) already assigned
+        continue; 
       }
        if (group.members.length > group.maxSize) {
         continue; 
       }
 
-
-      // Determine payment (simplified: could be second-price auction logic here)
-      // For now, let's assume they pay their effective bid or a portion of it.
-      // A more complex auction (Vickrey-Clarke-Groves) would be needed for true second-price with groups.
-      // Simplified: they pay their bid, split proportionally.
       const paymentAmount = effectiveBid; 
 
       const assignedPeopleInfo = group.members.map(member => {
@@ -294,7 +298,7 @@ export class MatchingEngine {
           individualPayment = paymentAmount;
         } else {
           const totalOriginalBid = group.members.reduce((sum, m) => sum + m.preferences.bidAmount, 0);
-          if (totalOriginalBid === 0) { // Avoid division by zero if all bids are 0 (unlikely with positive effective bid)
+          if (totalOriginalBid === 0) { 
              individualPayment = Math.round(paymentAmount / group.members.length);
           } else {
             const memberProportion = member.preferences.bidAmount / totalOriginalBid;
@@ -311,18 +315,16 @@ export class MatchingEngine {
       });
 
       apartmentInSystem.currentTenants += group.members.length;
-      // apartmentInSystem.allowRoommates = apartmentInSystem.currentTenants < apartmentInSystem.numBedrooms; // This should be based on original capacity
 
       results.push({
         apartmentId: apartmentInSystem.id,
         apartmentName: apartmentInSystem.name,
         assignedPeople: assignedPeopleInfo,
-        totalPayment: paymentAmount, // This is the group's total payment for this iteration
+        totalPayment: paymentAmount, 
         tenants: apartmentInSystem.currentTenants,
-        capacity: apartmentInSystem.numBedrooms, // Original capacity
+        capacity: apartmentInSystem.numBedrooms, 
       });
 
-      // Remove bids from people who are now assigned
       for (let i = allBids.length - 1; i >= 0; i--) {
         const currentBidGroup = allBids[i].bidder as RoommateGroup;
         if (currentBidGroup.members.some(m => assignedPeopleIds.has(m.id))) {

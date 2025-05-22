@@ -7,25 +7,28 @@ interface RoommateSectionProps {
   form: any;
   watchedValues: any;
   formatTime: (minutes: number) => string;
+  sleepTimeSliderMin: number;
+  sleepTimeSliderMax: number;
 }
 
-export function RoommateSection({ form, watchedValues, formatTime }: RoommateSectionProps) {
-  const sleepTimeOptions = [];
-  for (let i = 480; i <= 180 + 1440; i += 30) { // 8 PM to 3 AM
-    const actualTime = i > 1440 ? i - 1440 : i;
-    sleepTimeOptions.push({
-      value: actualTime,
-      label: formatTime(actualTime),
-    });
-  }
+export function RoommateSection({ 
+  form, 
+  watchedValues, 
+  formatTime,
+  sleepTimeSliderMin,
+  sleepTimeSliderMax
+}: RoommateSectionProps) {
 
   const wakeTimeOptions = [];
-  for (let i = 240; i <= 780; i += 30) { // 4 AM to 1 PM
+  for (let i = 4 * 60; i <= 13 * 60; i += 30) { // 4 AM to 1 PM
     wakeTimeOptions.push({
       value: i,
       label: formatTime(i),
     });
   }
+  
+  const currentSleepTimeRange = watchedValues.sleepTime || [22 * 60, 24 * 60];
+
 
   return (
     <div className="space-y-6">
@@ -93,7 +96,7 @@ export function RoommateSection({ form, watchedValues, formatTime }: RoommateSec
                   />
                   <div className="flex justify-between text-xs text-slate-500">
                     <span>Not Important</span>
-                    <span className="font-medium text-slate-700">{watchedValues[key] || 50}</span>
+                    {/* Removed numerical display: <span className="font-medium text-slate-700">{watchedValues[key] || 50}</span> */}
                     <span>Very Important</span>
                   </div>
                 </div>
@@ -106,22 +109,25 @@ export function RoommateSection({ form, watchedValues, formatTime }: RoommateSec
             <h4 className="text-sm font-medium text-slate-700">Sleep Schedule</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label>I go to sleep around</Label>
-                <Select 
-                  value={watchedValues.sleepTime?.toString()} 
-                  onValueChange={(value) => form.setValue("sleepTime", parseInt(value))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sleepTimeOptions.map(({ value, label }) => (
-                      <SelectItem key={value} value={value.toString()}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>I go to sleep between</Label>
+                 <Slider
+                  value={currentSleepTimeRange}
+                  onValueChange={(value) => form.setValue("sleepTime", value as [number, number])}
+                  min={sleepTimeSliderMin} 
+                  max={sleepTimeSliderMax}
+                  step={30} // 30 minute increments
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>{formatTime(sleepTimeSliderMin)}</span>
+                  <span className="font-medium text-slate-700">
+                    {formatTime(currentSleepTimeRange[0])} - {formatTime(currentSleepTimeRange[1])}
+                  </span>
+                  <span>{formatTime(sleepTimeSliderMax)}</span>
+                </div>
+                 {form.formState.errors.sleepTime && (
+                  <p className="text-sm text-red-600">{(form.formState.errors.sleepTime as any).message || (form.formState.errors.sleepTime as any)?.[0]?.message || (form.formState.errors.sleepTime as any)?.[1]?.message}</p>
+                )}
               </div>
 
               <div className="space-y-2">

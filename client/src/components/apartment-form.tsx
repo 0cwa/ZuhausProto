@@ -13,7 +13,11 @@ import { useToast } from "@/hooks/use-toast";
 import { RoommateSection } from "./roommate-section";
 import { encryptData } from "@/lib/crypto";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
+import { Loader2, Send, User, Home, Users, DollarSign, BedDouble } from "lucide-react";
+
+// Min/max for sleep time slider (linear minutes, 7 PM to 5 AM next day)
+const SLEEP_TIME_SLIDER_MIN = 19 * 60; // 7 PM
+const SLEEP_TIME_SLIDER_MAX = (24 + 5) * 60; // 5 AM (next day) = 29 * 60
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -47,7 +51,8 @@ const formSchema = z.object({
   quietness: z.number().min(0).max(100).optional(),
   guests: z.number().min(0).max(100).optional(),
   personalSpace: z.number().min(0).max(100).optional(),
-  sleepTime: z.number().min(0).max(1439).optional(), // minutes in a day
+  sleepTime: z.tuple([z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX), z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX)])
+    .refine(data => data[0] <= data[1], { message: "Min sleep time must be less than or equal to max" }).optional(),
   wakeTime: z.number().min(0).max(1439).optional(), // minutes in a day
 });
 
@@ -117,8 +122,8 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       quietness: 60,
       guests: 40,
       personalSpace: 80,
-      sleepTime: 1380, // 11:00 PM (23 * 60)
-      wakeTime: 420, // 7:00 AM (7 * 60)
+      sleepTime: [22 * 60, (24 + 0) * 60], // 10 PM - 12 AM (midnight)
+      wakeTime: 7 * 60, // 7:00 AM
     },
   });
 
@@ -126,7 +131,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
 
   const fetchIndividualCount = useCallback(async (field: keyof IndividualCountState, params: URLSearchParams) => {
     try {
-      // Add cache-busting parameter
       params.set('_cb', new Date().getTime().toString());
       const response = await fetch(`/api/apartments/count?${params.toString()}`);
       if (!response.ok) {
@@ -136,7 +140,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       setIndividualCounts(prev => ({ ...prev, [field]: data.count }));
     } catch (error) {
       console.error(`Error fetching count for ${field}:`, error);
-      setIndividualCounts(prev => ({ ...prev, [field]: null })); // Set to null on error to show loading/error
+      setIndividualCounts(prev => ({ ...prev, [field]: null }));
     }
   }, []);
 
@@ -185,8 +189,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   
   useEffect(() => {
     const params = new URLSearchParams();
-    // Only send the parameter if the checkbox is checked, to count apartments WITH the feature.
-    // If unchecked, an empty params means "all apartments match this lack of preference for this specific counter"
     if (watchedValues.hasDishwasher) {
         params.set('hasDishwasher', 'true');
     }
@@ -209,8 +211,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     fetchIndividualCount('hasDryer', params);
   }, [watchedValues.hasDryer, fetchIndividualCount]);
 
-
-  // Update overall apartment count for the header
   useEffect(() => {
     const updateOverallCount = async () => {
       try {
@@ -233,7 +233,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         if (watchedValues.hasWasher) params.set('hasWasher', 'true');
         if (watchedValues.hasDryer) params.set('hasDryer', 'true');
         
-        params.set('_cb', new Date().getTime().toString()); // Cache buster for overall count too
+        params.set('_cb', new Date().getTime().toString());
         const response = await fetch(`/api/apartments/count?${params.toString()}`);
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -242,11 +242,10 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         onApartmentCountChange(data.count);
       } catch (error) {
         console.error('Error updating overall apartment count:', error);
-        // Optionally set overall count to null or an error state
       }
     };
     updateOverallCount();
-  }, [watchedValues, onApartmentCountChange, fetchIndividualCount]); // Added fetchIndividualCount to dep array if it's used indirectly
+  }, [watchedValues, onApartmentCountChange]);
 
   const onSubmit = async (data: FormData) => {
     if (!serverPublicKey) {
@@ -283,8 +282,9 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   };
 
   const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60) % 24; // Ensure hours are within 0-23 range
-    const mins = minutes % 60;
+    const normalizedMinutes = minutes % 1440; // Normalize to a 0-1439 range for display logic
+    const hours = Math.floor(normalizedMinutes / 60); // This will be 0-23
+    const mins = normalizedMinutes % 60;
     const period = hours >= 12 ? 'PM' : 'AM';
     const displayHours = hours % 12 === 0 ? 12 : hours % 12;
     return `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
@@ -305,7 +305,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             Basic Information
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-6"> {/* Changed to 1 column for name only */}
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
             <Input
@@ -315,25 +315,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             />
             {form.formState.errors.name && (
               <p className="text-sm text-red-600">{form.formState.errors.name.message}</p>
-            )}
-          </div>
-          
-          <div className="space-y-2">
-            <Label htmlFor="bidAmount">Maximum Bid Amount</Label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                id="bidAmount"
-                type="number"
-                {...form.register("bidAmount", { valueAsNumber: true })}
-                className="pl-10"
-                placeholder="2000"
-                min={0}
-                step={50}
-              />
-            </div>
-            {form.formState.errors.bidAmount && (
-              <p className="text-sm text-red-600">{form.formState.errors.bidAmount.message}</p>
             )}
           </div>
         </CardContent>
@@ -436,7 +417,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="md:col-span-2 space-y-4">
               <div className="flex justify-between items-center">
-                <Label>Window Directions (AND contains)</Label>
+                <Label>Window Directions (OR contains at least one selected direction)</Label>
                 {renderCountBadge(individualCounts.windowDirections)}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -654,7 +635,43 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <RoommateSection form={form} watchedValues={watchedValues} formatTime={formatTime} />
+          <RoommateSection 
+            form={form} 
+            watchedValues={watchedValues} 
+            formatTime={formatTime} 
+            sleepTimeSliderMin={SLEEP_TIME_SLIDER_MIN}
+            sleepTimeSliderMax={SLEEP_TIME_SLIDER_MAX}
+          />
+        </CardContent>
+      </Card>
+
+      {/* Bid Amount */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-primary" />
+            Financials
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            <Label htmlFor="bidAmount">Maximum Bid Amount</Label>
+            <div className="relative">
+              <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                id="bidAmount"
+                type="number"
+                {...form.register("bidAmount", { valueAsNumber: true })}
+                className="pl-10"
+                placeholder="2000"
+                min={0}
+                step={50}
+              />
+            </div>
+            {form.formState.errors.bidAmount && (
+              <p className="text-sm text-red-600">{form.formState.errors.bidAmount.message}</p>
+            )}
+          </div>
         </CardContent>
       </Card>
 

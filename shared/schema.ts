@@ -43,8 +43,8 @@ export const personPreferencesSchema = z.object({
   quietness: z.number().optional(),
   guests: z.number().optional(),
   personalSpace: z.number().optional(),
-  sleepTime: z.number().optional(),
-  wakeTime: z.number().optional(),
+  sleepTime: z.tuple([z.number(), z.number()]).optional(), // [min, max] linear minutes, can exceed 1439
+  wakeTime: z.number().min(0).max(1439).optional(), // minutes in a day
 });
 
 // Person data schema
