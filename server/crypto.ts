@@ -5,20 +5,12 @@ export class ECKeyPair {
   public publicKey: crypto.KeyObject;
 
   constructor() {
-    const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', {
+    const keyPair = crypto.generateKeyPairSync('rsa', {
       modulusLength: 2048,
-      publicKeyEncoding: {
-        type: 'spki',
-        format: 'pem'
-      },
-      privateKeyEncoding: {
-        type: 'pkcs8',
-        format: 'pem'
-      }
     });
 
-    this.privateKey = privateKey;
-    this.publicKey = publicKey;
+    this.privateKey = keyPair.privateKey;
+    this.publicKey = keyPair.publicKey;
   }
 
   getPublicKeyDER(): Buffer {
