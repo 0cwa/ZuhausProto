@@ -1,0 +1,13 @@
+Name,SqMeters,NumWindows,WindowDirections,TotalWindowSize,NumBedrooms,NumBathrooms,HasDishwasher,HasWasher,HasDryer,Tenants,AllowRoommates
+Sunset View Studio,45,3,S;W,8,1,1,true,false,false,0,true
+Garden Terrace 1B,65,4,N;E,12,1,1,true,true,true,0,true
+City Heights 2B,85,6,N;S;E,15,2,1,false,true,false,0,true
+Riverside Loft,90,5,E;W,18,2,2,true,true,true,0,true
+Mountain View 3B,120,8,N;S;E;W,25,3,2,true,true,true,0,true
+Downtown Studio,35,2,S,6,1,1,false,false,false,0,true
+Park Side 2B,75,5,N;W,14,2,1,true,false,true,0,true
+Harbor View 1B,60,4,E;S,10,1,1,false,true,false,0,true
+Skyline Penthouse,150,10,N;S;E;W,30,3,3,true,true,true,0,true
+Forest Glen 2B,80,6,N;E,16,2,2,true,true,false,0,true
+Ocean Breeze 1B,55,3,E;S,9,1,1,true,false,true,0,true
+Valley View 3B,110,7,N;W,20,3,2,false,true,true,0,true
