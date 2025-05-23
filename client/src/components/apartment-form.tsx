@@ -13,11 +13,15 @@ import { useToast } from "@/hooks/use-toast";
 import { RoommateSection } from "./roommate-section";
 import { encryptData } from "@/lib/crypto";
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Send, User, Home, Users, DollarSign, BedDouble } from "lucide-react";
+import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
 
 // Min/max for sleep time slider (linear minutes, 7 PM to 5 AM next day)
 const SLEEP_TIME_SLIDER_MIN = 19 * 60; // 7 PM
 const SLEEP_TIME_SLIDER_MAX = (24 + 5) * 60; // 5 AM (next day) = 29 * 60
+
+// Min/max for wake time slider (linear minutes, e.g., 4 AM to 1 PM)
+const WAKE_TIME_SLIDER_MIN = 4 * 60; // 4 AM
+const WAKE_TIME_SLIDER_MAX = 13 * 60; // 1 PM
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
@@ -53,7 +57,8 @@ const formSchema = z.object({
   personalSpace: z.number().min(0).max(100).optional(),
   sleepTime: z.tuple([z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX), z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX)])
     .refine(data => data[0] <= data[1], { message: "Min sleep time must be less than or equal to max" }).optional(),
-  wakeTime: z.number().min(0).max(1439).optional(), // minutes in a day
+  wakeTime: z.tuple([z.number().min(WAKE_TIME_SLIDER_MIN).max(WAKE_TIME_SLIDER_MAX), z.number().min(WAKE_TIME_SLIDER_MIN).max(WAKE_TIME_SLIDER_MAX)])
+    .refine(data => data[0] <= data[1], { message: "Min wake time must be less than or equal to max" }).optional(),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -123,7 +128,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       guests: 40,
       personalSpace: 80,
       sleepTime: [22 * 60, (24 + 0) * 60], // 10 PM - 12 AM (midnight)
-      wakeTime: 7 * 60, // 7:00 AM
+      wakeTime: [6 * 60, 8 * 60], // 6 AM - 8 AM
     },
   });
 
@@ -192,6 +197,10 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     if (watchedValues.hasDishwasher) {
         params.set('hasDishwasher', 'true');
     }
+    // For individual count, if not checked, we want to show count of apartments *without* it,
+    // or more simply, only query when true. The current behavior is to show total if not set.
+    // To show "0" if no apartments have dishwashers when checked, the backend must return 0.
+    // The current issue is likely CSV parsing.
     fetchIndividualCount('hasDishwasher', params);
   }, [watchedValues.hasDishwasher, fetchIndividualCount]);
 
@@ -282,8 +291,8 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   };
 
   const formatTime = (minutes: number) => {
-    const normalizedMinutes = minutes % 1440; // Normalize to a 0-1439 range for display logic
-    const hours = Math.floor(normalizedMinutes / 60); // This will be 0-23
+    const normalizedMinutes = minutes % 1440; 
+    const hours = Math.floor(normalizedMinutes / 60); 
     const mins = normalizedMinutes % 60;
     const period = hours >= 12 ? 'PM' : 'AM';
     const displayHours = hours % 12 === 0 ? 12 : hours % 12;
@@ -305,7 +314,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             Basic Information
           </CardTitle>
         </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-6"> {/* Changed to 1 column for name only */}
+        <CardContent className="grid grid-cols-1 md:grid-cols-1 gap-6">
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
             <Input
@@ -417,7 +426,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="md:col-span-2 space-y-4">
               <div className="flex justify-between items-center">
-                <Label>Window Directions (OR contains at least one selected direction)</Label>
+                <Label>Window Directions (match if >=75% of selected are present)</Label>
                 {renderCountBadge(individualCounts.windowDirections)}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -554,7 +563,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                             onValueChange={(value) => form.setValue("numBathrooms", value as [number, number])}
                             min={1}
                             max={4}
-                            step={1}
+                            step={0.5} 
                             className="w-full"
                         />
                         <div className="flex justify-between text-xs text-slate-500">
@@ -641,6 +650,8 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             formatTime={formatTime} 
             sleepTimeSliderMin={SLEEP_TIME_SLIDER_MIN}
             sleepTimeSliderMax={SLEEP_TIME_SLIDER_MAX}
+            wakeTimeSliderMin={WAKE_TIME_SLIDER_MIN}
+            wakeTimeSliderMax={WAKE_TIME_SLIDER_MAX}
           />
         </CardContent>
       </Card>

@@ -1,7 +1,6 @@
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface RoommateSectionProps {
   form: any;
@@ -9,6 +8,8 @@ interface RoommateSectionProps {
   formatTime: (minutes: number) => string;
   sleepTimeSliderMin: number;
   sleepTimeSliderMax: number;
+  wakeTimeSliderMin: number;
+  wakeTimeSliderMax: number;
 }
 
 export function RoommateSection({ 
@@ -16,18 +17,13 @@ export function RoommateSection({
   watchedValues, 
   formatTime,
   sleepTimeSliderMin,
-  sleepTimeSliderMax
+  sleepTimeSliderMax,
+  wakeTimeSliderMin,
+  wakeTimeSliderMax
 }: RoommateSectionProps) {
-
-  const wakeTimeOptions = [];
-  for (let i = 4 * 60; i <= 13 * 60; i += 30) { // 4 AM to 1 PM
-    wakeTimeOptions.push({
-      value: i,
-      label: formatTime(i),
-    });
-  }
   
-  const currentSleepTimeRange = watchedValues.sleepTime || [22 * 60, 24 * 60];
+  const currentSleepTimeRange = watchedValues.sleepTime || [22 * 60, 24 * 60]; // Default 10 PM - 12 AM
+  const currentWakeTimeRange = watchedValues.wakeTime || [6 * 60, 8 * 60]; // Default 6 AM - 8 AM
 
 
   return (
@@ -96,7 +92,6 @@ export function RoommateSection({
                   />
                   <div className="flex justify-between text-xs text-slate-500">
                     <span>Not Important</span>
-                    {/* Removed numerical display: <span className="font-medium text-slate-700">{watchedValues[key] || 50}</span> */}
                     <span>Very Important</span>
                   </div>
                 </div>
@@ -115,7 +110,7 @@ export function RoommateSection({
                   onValueChange={(value) => form.setValue("sleepTime", value as [number, number])}
                   min={sleepTimeSliderMin} 
                   max={sleepTimeSliderMax}
-                  step={30} // 30 minute increments
+                  step={30} 
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-slate-500">
@@ -131,22 +126,25 @@ export function RoommateSection({
               </div>
 
               <div className="space-y-2">
-                <Label>I wake up around</Label>
-                <Select 
-                  value={watchedValues.wakeTime?.toString()} 
-                  onValueChange={(value) => form.setValue("wakeTime", parseInt(value))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wakeTimeOptions.map(({ value, label }) => (
-                      <SelectItem key={value} value={value.toString()}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>I wake up between</Label>
+                <Slider
+                  value={currentWakeTimeRange}
+                  onValueChange={(value) => form.setValue("wakeTime", value as [number, number])}
+                  min={wakeTimeSliderMin}
+                  max={wakeTimeSliderMax}
+                  step={30} 
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-slate-500">
+                  <span>{formatTime(wakeTimeSliderMin)}</span>
+                  <span className="font-medium text-slate-700">
+                    {formatTime(currentWakeTimeRange[0])} - {formatTime(currentWakeTimeRange[1])}
+                  </span>
+                  <span>{formatTime(wakeTimeSliderMax)}</span>
+                </div>
+                {form.formState.errors.wakeTime && (
+                  <p className="text-sm text-red-600">{(form.formState.errors.wakeTime as any).message || (form.formState.errors.wakeTime as any)?.[0]?.message || (form.formState.errors.wakeTime as any)?.[1]?.message}</p>
+                )}
               </div>
             </div>
           </div>

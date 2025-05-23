@@ -49,27 +49,26 @@ export class MatchingEngine {
 
     const sleepRange1 = person1.preferences.sleepTime;
     const sleepRange2 = person2.preferences.sleepTime;
-    const wake1 = person1.preferences.wakeTime;
-    const wake2 = person2.preferences.wakeTime;
+    const wakeRange1 = person1.preferences.wakeTime;
+    const wakeRange2 = person2.preferences.wakeTime;
 
-    // Handle sleep time (now a range)
     if (sleepRange1 && sleepRange2 && sleepRange1.length === 2 && sleepRange2.length === 2) {
       const midSleep1 = (sleepRange1[0] + sleepRange1[1]) / 2;
       const midSleep2 = (sleepRange2[0] + sleepRange2[1]) / 2;
-      
-      // Normalize midpoints to be within a 0-1439 range for comparison if they exceed it due to linear scale
       const normMidSleep1 = midSleep1 % 1440;
       const normMidSleep2 = midSleep2 % 1440;
-
       const sleepDiff = Math.min(Math.abs(normMidSleep1 - normMidSleep2), 1440 - Math.abs(normMidSleep1 - normMidSleep2));
-      const sleepCompatibility = Math.max(0, 100 - (sleepDiff / 360) * 100); // Max penalty if 6 hours (360 min) apart
+      const sleepCompatibility = Math.max(0, 100 - (sleepDiff / 360) * 100);
       totalScore += sleepCompatibility;
       validFactors++;
     }
 
-
-    if (wake1 !== undefined && wake2 !== undefined) {
-      const wakeDiff = Math.min(Math.abs(wake1 - wake2), 1440 - Math.abs(wake1 - wake2));
+    if (wakeRange1 && wakeRange2 && wakeRange1.length === 2 && wakeRange2.length === 2) {
+      const midWake1 = (wakeRange1[0] + wakeRange1[1]) / 2;
+      const midWake2 = (wakeRange2[0] + wakeRange2[1]) / 2;
+      const normMidWake1 = midWake1 % 1440;
+      const normMidWake2 = midWake2 % 1440;
+      const wakeDiff = Math.min(Math.abs(normMidWake1 - normMidWake2), 1440 - Math.abs(normMidWake1 - normMidWake2));
       const wakeCompatibility = Math.max(0, 100 - (wakeDiff / 360) * 100);
       totalScore += wakeCompatibility;
       validFactors++;
@@ -218,11 +217,11 @@ export class MatchingEngine {
     checkRange(apartment.numBathrooms, preferences.numBathrooms, preferences.numBathroomsWorth);
 
     if (preferences.windowDirections && preferences.windowDirections.length > 0) {
-      // Logic changed to OR: if apartment does NOT have AT LEAST ONE of the preferred directions
-      const hasAtLeastOneDirection = preferences.windowDirections.some(dir => 
-        apartment.windowDirections.includes(dir)
-      );
-      if (!hasAtLeastOneDirection) {
+      const selectedDirections = preferences.windowDirections;
+      const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
+      const matchCount = selectedDirections.filter(dir => apartment.windowDirections.includes(dir)).length;
+      
+      if (matchCount < requiredMatches) {
         deduction += preferences.windowDirectionsWorth || 0;
       }
     }

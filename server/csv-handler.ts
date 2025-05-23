@@ -54,25 +54,26 @@ export class CSVHandler {
     try {
       const content = await fs.readFile(APARTMENT_CSV, 'utf8');
       const rows = await this.parseCSV(content);
-      const [headers, ...dataRows] = rows;
+      const [headers, ...dataRows] = rows; // headers are used implicitly by index
       
       return dataRows.map((row, index) => ({
-        id: (index + 1).toString(),
+        id: (index + 1).toString(), // Or use a more robust ID if available in CSV
         name: row[0] || `Apartment ${index + 1}`,
         sqMeters: parseFloat(row[1]) || 50,
         numWindows: parseInt(row[2]) || 2,
-        windowDirections: row[3] ? row[3].split(';') : ['N'],
+        windowDirections: row[3] ? row[3].split(';').map(d => d.trim()).filter(d => d) : ['N'],
         totalWindowSize: parseFloat(row[4]) || 10,
-        numBedrooms: parseInt(row[5]) || 1,
-        numBathrooms: parseInt(row[6]) || 1,
-        hasDishwasher: row[7]?.toLowerCase() === 'true',
-        hasWasher: row[8]?.toLowerCase() === 'true',
-        hasDryer: row[9]?.toLowerCase() === 'true',
-        tenants: parseInt(row[10]) || 0,
-        allowRoommates: row[11]?.toLowerCase() !== 'false',
+        // row[5] is Floor Level, currently not in schema
+        numBedrooms: parseInt(row[6]) || 1, // Corrected index
+        numBathrooms: parseFloat(row[7]) || 1, // Corrected index and parseFloat
+        hasDishwasher: row[8]?.toLowerCase() === 'true', // Corrected index
+        hasWasher: row[9]?.toLowerCase() === 'true', // Corrected index
+        hasDryer: row[10]?.toLowerCase() === 'true', // Corrected index
+        tenants: parseInt(row[11]) || 0, // Corrected index
+        allowRoommates: row[12]?.toLowerCase() !== 'false', // Corrected index
       }));
     } catch (error) {
-      // Return sample data if file doesn't exist
+      console.error('Error loading apartments, returning sample data:', error);
       return this.createSampleApartments();
     }
   }
@@ -82,6 +83,7 @@ export class CSVHandler {
     
     const headers = [
       'Name', 'SqMeters', 'NumWindows', 'WindowDirections', 'TotalWindowSize',
+      'FloorLevel', // Added to maintain CSV structure
       'NumBedrooms', 'NumBathrooms', 'HasDishwasher', 'HasWasher', 'HasDryer',
       'Tenants', 'AllowRoommates'
     ];
@@ -92,6 +94,7 @@ export class CSVHandler {
       apt.numWindows.toString(),
       apt.windowDirections.join(';'),
       apt.totalWindowSize.toString(),
+      (apt as any).floorLevel || "1", // Placeholder for FloorLevel if not in schema
       apt.numBedrooms.toString(),
       apt.numBathrooms.toString(),
       apt.hasDishwasher.toString(),
@@ -145,6 +148,9 @@ export class CSVHandler {
   }
 
   private createSampleApartments(): Apartment[] {
+    // This sample data generation should also reflect the 13-column structure if it's to be saved and reloaded.
+    // For simplicity, I'm keeping the Apartment type as defined in schema.ts.
+    // If FloorLevel becomes part of the schema, this should be updated.
     const apartments: Apartment[] = [];
     const names = [
       'Sunset View Studio', 'Garden Terrace 1B', 'City Heights 2B', 'Riverside Loft',
@@ -168,7 +174,7 @@ export class CSVHandler {
         windowDirections: selectedDirections,
         totalWindowSize: Math.floor(Math.random() * 15) + 5,
         numBedrooms,
-        numBathrooms: Math.floor(Math.random() * 3) + 1,
+        numBathrooms: (Math.floor(Math.random() * 2) + 1) + (Math.random() > 0.5 ? 0.5 : 0), // Sample with .5
         hasDishwasher: Math.random() > 0.4,
         hasWasher: Math.random() > 0.3,
         hasDryer: Math.random() > 0.5,

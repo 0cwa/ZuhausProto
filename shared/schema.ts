@@ -9,7 +9,7 @@ export const apartmentSchema = z.object({
   windowDirections: z.array(z.string()),
   totalWindowSize: z.number(),
   numBedrooms: z.number(),
-  numBathrooms: z.number(),
+  numBathrooms: z.number(), // Can be float e.g. 1.5
   hasDishwasher: z.boolean(),
   hasWasher: z.boolean(),
   hasDryer: z.boolean(),
@@ -44,7 +44,7 @@ export const personPreferencesSchema = z.object({
   guests: z.number().optional(),
   personalSpace: z.number().optional(),
   sleepTime: z.tuple([z.number(), z.number()]).optional(), // [min, max] linear minutes, can exceed 1439
-  wakeTime: z.number().min(0).max(1439).optional(), // minutes in a day
+  wakeTime: z.tuple([z.number(), z.number()]).optional(), // [min, max] linear minutes
 });
 
 // Person data schema

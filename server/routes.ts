@@ -55,12 +55,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (req.query.windowDirections) {
-        const directions = (req.query.windowDirections as string).split(',');
-        if (directions.length > 0) {
-            // OR logic: apartment must contain at least one of the selected directions
-            filteredApartments = filteredApartments.filter(apt => 
-              directions.some(dir => apt.windowDirections.includes(dir))
-            );
+        const selectedDirections = (req.query.windowDirections as string).split(',');
+        if (selectedDirections.length > 0) {
+            const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
+            filteredApartments = filteredApartments.filter(apt => {
+                const matchCount = selectedDirections.filter(dir => apt.windowDirections.includes(dir)).length;
+                return matchCount >= requiredMatches;
+            });
         }
       }
       
@@ -80,8 +81,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Filter by numBathrooms range
       if (req.query.numBathroomsMin && req.query.numBathroomsMax) {
-        const min = parseInt(req.query.numBathroomsMin as string);
-        const max = parseInt(req.query.numBathroomsMax as string);
+        const min = parseFloat(req.query.numBathroomsMin as string); 
+        const max = parseFloat(req.query.numBathroomsMax as string); 
         filteredApartments = filteredApartments.filter(apt => apt.numBathrooms >= min && apt.numBathrooms <= max);
       }
       
