@@ -177,7 +177,13 @@ export class CSVHandler {
       const headerMap = new Map(headers.map((h, i) => [h.trim(), i]));
 
       return dataRows.map(row => {
-        const preferences: PersonPreferences = JSON.parse(row[headerMap.get('Preferences')!] || '{}');
+        let preferencesString = row[headerMap.get('Preferences')!] || '{}';
+        // Remove outer quotes if present and unescape internal double quotes
+        if (preferencesString.startsWith('"') && preferencesString.endsWith('"')) {
+          preferencesString = preferencesString.substring(1, preferencesString.length - 1);
+          preferencesString = preferencesString.replace(/""/g, '"');
+        }
+        const preferences: PersonPreferences = JSON.parse(preferencesString);
         return {
           id: row[headerMap.get('ID')!],
           name: row[headerMap.get('Name')!],
@@ -189,6 +195,7 @@ export class CSVHandler {
       });
     } catch (error) {
       console.warn('Error loading cleartext people data, returning empty array:', error);
+      console.warn(error); // Log the full error for more context
       return [];
     }
   }
