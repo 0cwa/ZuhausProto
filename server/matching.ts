@@ -6,6 +6,11 @@ interface DecodedPerson extends Person {
   socialVector: number[];
 }
 
+// Extend Apartment to include a Set for windowDirections for efficient lookups
+interface PreparedApartment extends Apartment {
+  windowDirectionsSet: Set<string>;
+}
+
 interface RoommateGroup {
   members: DecodedPerson[];
   compatibility: number;
@@ -13,7 +18,7 @@ interface RoommateGroup {
 }
 
 interface ApartmentBid {
-  apartment: Apartment;
+  apartment: PreparedApartment; // Use PreparedApartment here
   bidder: RoommateGroup; // Bidder is always a group (even if size 1)
   totalGroupBid: number;
   individualAdjustedBids: { [personId: string]: number };
@@ -56,6 +61,14 @@ export class MatchingEngine {
     }
 
     return { ...person, socialVector };
+  }
+
+  // New method to prepare apartment for matching (add windowDirectionsSet)
+  private prepareApartmentForMatching(apartment: Apartment): PreparedApartment {
+    return {
+      ...apartment,
+      windowDirectionsSet: new Set(apartment.windowDirections)
+    };
   }
 
   private calculateSocialCompatibility(person1: DecodedPerson, person2: DecodedPerson): number {
@@ -162,7 +175,7 @@ export class MatchingEngine {
     return result;
   }
 
-  private calculateAdjustedBid(person: DecodedPerson, apartment: Apartment, groupSize: number): number {
+  private calculateAdjustedBid(person: DecodedPerson, apartment: PreparedApartment, groupSize: number): number {
     let baseBid = person.preferences.bidAmount;
     let deduction = 0;
     const prefs = person.preferences;
@@ -185,7 +198,8 @@ export class MatchingEngine {
     // Window Directions
     const prefWDirs = new Set(prefs.windowDirections || []);
     if (prefWDirs.size > 0) {
-      const intersection = [...prefWDirs].filter(dir => apartment.windowDirections.has(dir));
+      // FIX: Use apartment.windowDirectionsSet.has(dir) for efficient lookup
+      const intersection = [...prefWDirs].filter(dir => apartment.windowDirectionsSet.has(dir));
       if (intersection.length === 0) { // If none of the preferred directions are present
         deduction += prefs.windowDirectionsWorth || 0;
       }
@@ -216,9 +230,12 @@ export class MatchingEngine {
 
   async runMatching(people: Person[], apartments: Apartment[]): Promise<MatchingResult[]> {
     const decodedPeople: DecodedPerson[] = people.map(person => this.preparePersonForMatching(person));
+    // Prepare apartments by adding the windowDirectionsSet
+    const preparedApartments: PreparedApartment[] = apartments.map(apt => this.prepareApartmentForMatching(apt));
+
 
     let unassignedPeople = [...decodedPeople];
-    let availableApartments = [...apartments];
+    let availableApartments = [...preparedApartments]; // Use prepared apartments
 
     const assignmentsLog: any[] = []; // To store detailed assignment info for CSV output
 
@@ -237,7 +254,7 @@ export class MatchingEngine {
       // console.log(`Generated ${potentialGroups.length} potential groups.`);
 
       // 2. Determine which apartment to focus on (based on aggregate demand)
-      let bestAptToConsiderThisRound: Apartment | null = null;
+      let bestAptToConsiderThisRound: PreparedApartment | null = null;
       let highestPotentialWinningBidForApt = -1.0;
 
       const bidsForApartments = new Map<string, ApartmentBid[]>(); // aptId -> list of bids for this apt
@@ -373,6 +390,8 @@ export class MatchingEngine {
     assignmentsLog.forEach(logEntry => {
       let result = finalMatchingResultsMap.get(logEntry.apartment_name);
       if (!result) {
+        // Find apartment from the original apartments array, not preparedApartments,
+        // as the schema expects the original Apartment type.
         const apt = apartments.find(a => a.name === logEntry.apartment_name);
         if (!apt) {
           console.warn(`Apartment ${logEntry.apartment_name} not found in original list.`);
