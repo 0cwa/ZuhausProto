@@ -15,7 +15,6 @@ import { encryptData } from "@/lib/crypto";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import confetti from "canvas-confetti";
 
 // Min/max for sleep time slider (linear minutes, 7 PM to 5 AM next day)
 const SLEEP_TIME_SLIDER_MIN = 19 * 60; // 7 PM
@@ -293,12 +292,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       toast({
         title: "Success",
         description: "Your preferences have been submitted successfully!",
-      });
-      // Trigger confetti
-      confetti({
-        particleCount: 150,
-        spread: 180,
-        origin: { y: 0.6 }
       });
       // Reset the form and its submission state
       form.reset(form.getValues(), { keepErrors: false, keepDirty: false, keepIsSubmitted: false, keepTouched: false, keepIsValid: false, keepSubmitCount: false });
