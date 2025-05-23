@@ -272,18 +272,24 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   }, [watchedValues, onApartmentCountChange]);
 
   const onSubmit = async (data: FormData) => {
+    console.log("Attempting form submission...");
+    console.log("Form data:", data);
+    console.log("Form state before submission:", form.formState);
+
     if (!serverPublicKey) { // Still useful as a guard, even if key is dummy
       toast({
         title: "Configuration Error",
         description: "Client is not properly configured (missing server key placeholder).",
         variant: "destructive",
       });
+      console.error("Configuration Error: Missing server public key placeholder.");
       return;
     }
     setIsSubmitting(true);
     try {
       const { name, allowRoommates, ...preferences } = data;
       const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey);
+      console.log("Sending data to API:", { name, allowRoommates, encryptedData });
       await apiRequest("POST", "/api/submit-preferences", {
         name,
         allowRoommates,
@@ -295,7 +301,11 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         variant: "default", 
       });
       form.reset(); // Reset form to default values
+      console.log("Form reset after successful submission.");
+      // The formState.isValid will be true after reset if defaultValues are valid
+      // and formState.isSubmitted will be false.
     } catch (error: any) {
+      console.error("Submission error caught:", error);
       let displayMessage = "Failed to submit preferences. Please try again.";
       // apiRequest throws an error with message like "STATUS: Text"
       if (error.message && error.message.includes("409")) { 
@@ -326,6 +336,8 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       });
     } finally {
       setIsSubmitting(false);
+      console.log("Form submission process finished. isSubmitting set to false.");
+      console.log("Final form state:", form.formState);
     }
   };
 
@@ -737,7 +749,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             </div>
             <Button 
               type="submit" 
-              disabled={isSubmitting || !form.formState.isValid} 
+              disabled={isSubmitting} 
               variant="secondary"
               size="lg"
               className="bg-white text-primary hover:bg-blue-50 w-full sm:w-auto"
@@ -755,7 +767,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               )}
             </Button>
           </div>
-           {!form.formState.isValid && form.formState.isSubmitted && ( 
+           {form.formState.isSubmitted && !form.formState.isValid && ( 
              <p className="text-sm text-red-200 mt-2 text-center sm:text-right">Please correct the errors above before submitting.</p>
            )}
         </CardContent>
