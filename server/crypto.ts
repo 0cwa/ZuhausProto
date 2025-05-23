@@ -1,6 +1,8 @@
 // This file is now a dummy for debugging purposes,
 // providing a placeholder for serverKeyPair without actual encryption.
 
+// No crypto module import needed in this dummy version.
+
 export class ECKeyPair {
   // No actual keys are generated or stored in this debugging version.
 
