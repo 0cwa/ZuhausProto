@@ -189,8 +189,10 @@ export class CSVHandler {
             throw new Error("Missing critical columns in people.csv");
           }
           
-          let preferencesString = row[encryptedDataColIdx] || '{}'; // encryptedData now holds preferences JSON
-          const preferences: PersonPreferences = JSON.parse(preferencesString);
+          let preferencesString = row[encryptedDataColIdx] || '{}'; 
+          // *** FIX: Base64 decode the preferences string before parsing JSON ***
+          let decodedPreferencesString = Buffer.from(preferencesString, 'base64').toString('utf8');
+          const preferences: PersonPreferences = JSON.parse(decodedPreferencesString);
           
           const personData: Person = {
             id: row[idColIdx],
@@ -225,7 +227,8 @@ export class CSVHandler {
     const rows = people.map(person => [
       person.id, 
       person.name,
-      JSON.stringify(person.preferences), // Save preferences as JSON string in EncryptedData column
+      // *** FIX: Base64 encode the JSON string before saving ***
+      Buffer.from(JSON.stringify(person.preferences)).toString('base64'), 
       person.allowRoommates.toString(),
       person.assignedRoom || '',
       person.requiredPayment?.toString() || '',
