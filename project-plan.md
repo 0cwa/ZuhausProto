@@ -22,8 +22,8 @@ Phase 0: Setup & Core Infrastructure
         [FS] Set up project repository (e.g., Git).
         [FS] Choose backend framework (e.g., Node.js/Express, Python/Flask).
         [FS] Set up basic project structure (folders for frontend, backend, assets, data).
-        [FS] Initialize apartment_data.csv with provided sample data.
-        [FS] Create an empty people.csv with headers: Name,EncryptedData,AllowRoommates,AssignedRoom,RequiredPayment.
+        [FS] Initialize apartment_data.csv with provided sample data. (WindowDirections are semicolon-separated).
+        [FS] Create an initial people.csv. Headers can be: Name,EncryptedData,AllowRoommates,AssignedRoom,RequiredPayment. The system will generate IDs internally and include an 'ID' column when saving this file.
 
     Cryptography Setup:
         [BE] Generate a persistent Elliptic Curve (EC) key pair (private/public) for the server. Store the private key securely.
@@ -69,9 +69,9 @@ Phase 1: Public-Facing Form Page (/)
             [BE] Backend logic for min/max from apartment_data.csv.
             [FE] Display current slider value.
         [FE] Window Directions Checkboxes:
-            [BE] Backend logic to get all unique directions from apartment_data.csv (e.g., "N", "S", "E", "W", "NE", etc.).
+            [BE] Backend logic to get all unique directions from apartment_data.csv (e.g., "N", "S", "E", "W", "NE", etc. Values are semicolon-separated in the CSV).
             [FE] Generate checkboxes dynamically based on unique directions.
-            [FE] Implement "AND contains" logic for filtering preview counts. (If "N" and "E" are checked, count apartments with both N and E).
+            [FE] Implement "OR contains" logic for filtering preview counts. (If "N" or "E" are checked, count apartments with N or E or both).
         [FE] Total Window Size Slider:
             [FE] Range slider.
             [BE] Backend logic for min/max from apartment_data.csv.
@@ -117,7 +117,7 @@ Phase 1: Public-Facing Form Page (/)
         [BE] In POST /api/submit-preferences:
             [BE] Read people.csv.
             [BE] Check if "Name" already exists. If so, return an error (e.g., 409 Conflict).
-            [BE] If name is unique, append a new row to people.csv with: Name, EncryptedData, AllowRoommates value, empty AssignedRoom, empty RequiredPayment.
+            [BE] If name is unique, append a new row to people.csv (ensuring an ID column is present/added): ID, Name, EncryptedData, AllowRoommates value, empty AssignedRoom, empty RequiredPayment.
             [BE] Return success/failure message to the client.
         [FE] Display success/error message to the user. Clear form on success.
 
@@ -134,7 +134,7 @@ Phase 2: Admin Panel (/adminsecret)
         [FE] Apply basic CSS for layout and styling.
 
     Live List of Names:
-        [BE] Create an API endpoint (e.g., GET /api/admin/people-status) that reads people.csv and returns Name, AssignedRoom (derived: true if AssignedRoom column is not empty), and AllowRoommates for each person.
+        [BE] Create an API endpoint (e.g., GET /api/admin/people-status) that reads people.csv and returns ID, Name, AssignedRoom (derived: true if AssignedRoom column is not empty), and AllowRoommates for each person.
         [FE] Fetch data from /api/admin/people-status on admin panel load.
         [FE] Display the list of names, assigned status, and if they allow roommates.
         [FE] Implement polling or WebSockets (if feeling ambitious) to keep this list "live".
@@ -176,7 +176,7 @@ Phase 2: Admin Panel (/adminsecret)
         [BE] Decryption (if needed again): Decrypt people.csv data.
         [BE] Update apartment_data.csv:
             [BE] For each assigned apartment, update Tenants with the number of assigned people.
-            [BE] For each assigned apartment, update Allow Roommates. Logic: if all people in the assigned group had "Allow Roommates" checked AND Tenants < Number of Bedrooms, set to True. Otherwise False. Simpler: if Tenants == Number of Bedrooms, set to False, else if any assigned person had Allow Roommates = true, set to True. (Clarify this logic - for now, let's go with: if Tenants == Number of Bedrooms, set apartment Allow Roommates to False. Otherwise, if the group that was assigned collectively expressed willingness for more roommates (e.g., based on their initial preference), set to True. If individuals, it's based on their single preference. This is still a bit fuzzy from the prompt "updates if the people there allow roommates". A simple rule: if the apartment is now full based on Number of Bedrooms, Allow Roommates becomes False. If not full, and the assigned tenants as a whole indicated they are open to more (e.g. all of them selected Allow Roommates), set to True.)
+            [BE] For each assigned apartment, update Allow Roommates. Logic: if all people in the assigned group had "Allow Roommates" checked AND Tenants < Number of Bedrooms, set to True. Otherwise False. Simpler: if Tenants == Number of Bedrooms, set apartment Allow Roommates to False. Otherwise, if the group that was assigned collectively expressed willingness for more roommates (e.g., based on their initial preference), set to True. If individuals, it's based on their single preference. This is still a bit fuzzy from the prompt "updates if the people there allow roommates". A simple rule: if the apartment is now full based on Number of Bedrooms, Allow Roommates becomes False. If not full, and the assigned tenants as a whole indicated they are open to more (e.g. all of them selected Allow Roommates), set to True. Otherwise, it becomes False.
             Revised Simpler Logic for apartment_data.csv -> Allow Roommates update: After assignment, if Tenants == Number of Bedrooms, then Allow Roommates for that apartment becomes False. If Tenants < Number of Bedrooms, and the original people.csv entries for the assigned individuals all had Allow Roommates = True, then the apartment's Allow Roommates remains True. Otherwise, it becomes False.
         [BE] Update people.csv:
             [BE] For each assigned person, update their AssignedRoom column with the apartment name.

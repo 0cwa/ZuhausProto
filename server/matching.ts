@@ -217,11 +217,11 @@ export class MatchingEngine {
     checkRange(apartment.numBathrooms, preferences.numBathrooms, preferences.numBathroomsWorth);
 
     if (preferences.windowDirections && preferences.windowDirections.length > 0) {
-      const selectedDirections = preferences.windowDirections;
-      const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
-      const matchCount = selectedDirections.filter(dir => apartment.windowDirections.includes(dir)).length;
-      
-      if (matchCount < requiredMatches) {
+      // OR logic: if apartment does NOT have AT LEAST ONE of the preferred directions
+      const hasAtLeastOneMatch = preferences.windowDirections.some(dir => 
+        apartment.windowDirections.includes(dir)
+      );
+      if (!hasAtLeastOneMatch) {
         deduction += preferences.windowDirectionsWorth || 0;
       }
     }

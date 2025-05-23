@@ -26,7 +26,7 @@ const WAKE_TIME_SLIDER_MAX = 13 * 60; // 1 PM
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  sqMeters: z.tuple([z.number().min(20).max(200), z.number().min(20).max(200)]) // Changed max to 200
+  sqMeters: z.tuple([z.number().min(20).max(200), z.number().min(20).max(200)]) 
     .refine(data => data[0] <= data[1], { message: "Min sq meters must be less than or equal to max" }),
   sqMetersWorth: z.number().min(0).optional(),
   numWindows: z.tuple([z.number().min(1).max(12), z.number().min(1).max(12)])
@@ -99,25 +99,25 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     hasDryer: null,
   });
 
-  const { data: minMaxData, isLoading: isLoadingMinMax } = useQuery({
-    queryKey: ["/api/apartments/min-max"],
+  const { data: minMaxData } = useQuery({ // isLoadingMinMax removed as it's not used
+    queryKey: ["/api/apartments/min-max"], // This endpoint needs to be created
   });
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      sqMeters: [20, 200], // Default values will be updated by useEffect
+      sqMeters: [20, 200], 
       sqMetersWorth: 0,
-      numWindows: [1, 12], // Default values will be updated by useEffect
+      numWindows: [1, 12], 
       numWindowsWorth: 0,
       windowDirections: [],
       windowDirectionsWorth: 0,
-      totalWindowSize: [2, 25], // Default values will be updated by useEffect
+      totalWindowSize: [2, 25], 
       totalWindowSizeWorth: 0,
-      numBedrooms: [1, 5], // Default values will be updated by useEffect
+      numBedrooms: [1, 5], 
       numBedroomsWorth: 0,
-      numBathrooms: [1, 4], // Default values will be updated by useEffect
+      numBathrooms: [1, 4], 
       numBathroomsWorth: 0,
       hasDishwasher: false,
       dishwasherWorth: 0,
@@ -132,16 +132,15 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       quietness: 60,
       guests: 40,
       personalSpace: 80,
-      sleepTime: [22 * 60, (24 + 0) * 60], // 10 PM - 12 AM (midnight)
-      wakeTime: [6 * 60, 8 * 60], // 6 AM - 8 AM
+      sleepTime: [22 * 60, (24 + 0) * 60], 
+      wakeTime: [6 * 60, 8 * 60], 
     },
   });
 
-  // Update form default values once minMaxData is loaded
   useEffect(() => {
     if (minMaxData) {
       form.reset({
-        ...form.getValues(), // Keep existing values if user has interacted
+        ...form.getValues(), 
         sqMeters: [minMaxData.sqMeters.min, minMaxData.sqMeters.max],
         numWindows: [minMaxData.numWindows.min, minMaxData.numWindows.max],
         totalWindowSize: [minMaxData.totalWindowSize.min, minMaxData.totalWindowSize.max],
@@ -149,7 +148,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         numBathrooms: [minMaxData.numBathrooms.min, minMaxData.numBathrooms.max],
       });
     }
-  }, [minMaxData, form.reset]);
+  }, [minMaxData, form.reset, form]); // Added form to dependency array
 
 
   const watchedValues = form.watch();
@@ -217,9 +216,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     if (watchedValues.hasDishwasher) {
         params.set('hasDishwasher', 'true');
     }
-    // For individual count, if not checked, we want to show count of apartments *without* it,
-    // or more simply, only query when true. The current behavior is to show total if not set.
-    // The current issue is likely CSV parsing.
     fetchIndividualCount('hasDishwasher', params);
   }, [watchedValues.hasDishwasher, fetchIndividualCount]);
 
@@ -297,7 +293,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         title: "Success",
         description: "Your preferences have been submitted successfully!",
       });
-      form.reset(); // Reset the form after successful submission
+      form.reset(); 
     } catch (error: any) {
       toast({
         title: "Error",
@@ -369,14 +365,14 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                   value={watchedValues.sqMeters}
                   onValueChange={(value) => form.setValue("sqMeters", value as [number, number])}
                   min={minMaxData?.sqMeters.min ?? 20}
-                  max={minMaxData?.sqMeters.max ?? 200} // Changed max to 200
+                  max={minMaxData?.sqMeters.max ?? 200} 
                   step={5}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-slate-500">
                   <span>{minMaxData?.sqMeters.min ?? 20}m²</span>
                   <span className="font-medium text-slate-700">{watchedValues.sqMeters[0]}m² - {watchedValues.sqMeters[1]}m²</span>
-                  <span>{minMaxData?.sqMeters.max ?? 200}m²</span> {/* Changed max to 200 */}
+                  <span>{minMaxData?.sqMeters.max ?? 200}m²</span> 
                 </div>
                  {form.formState.errors.sqMeters && (
                   <p className="text-sm text-red-600">{(form.formState.errors.sqMeters as any).message || form.formState.errors.sqMeters?.[0]?.message || form.formState.errors.sqMeters?.[1]?.message}</p>
@@ -445,7 +441,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="md:col-span-2 space-y-4">
               <div className="flex justify-between items-center">
-                <Label>Window Directions (match if &gt;=75% of selected are present)</Label>
+                <Label>Window Directions (match if any selected are present)</Label>
                 {renderCountBadge(individualCounts.windowDirections)}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -717,7 +713,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             </div>
             <Button 
               type="submit" 
-              disabled={isSubmitting || !form.formState.isValid} // Simplified disabled logic
+              disabled={isSubmitting || !form.formState.isValid} 
               variant="secondary"
               size="lg"
               className="bg-white text-primary hover:bg-blue-50 w-full sm:w-auto"
@@ -735,7 +731,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               )}
             </Button>
           </div>
-           {!form.formState.isValid && form.formState.isSubmitted && ( // Only show if submitted AND invalid
+           {!form.formState.isValid && form.formState.isSubmitted && ( 
              <p className="text-sm text-red-200 mt-2 text-center sm:text-right">Please correct the errors above before submitting.</p>
            )}
         </CardContent>

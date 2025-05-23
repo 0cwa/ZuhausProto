@@ -54,28 +54,26 @@ export class CSVHandler {
     try {
       const content = await fs.readFile(APARTMENT_CSV, 'utf8');
       const rows = await this.parseCSV(content);
-      const [headers, ...dataRows] = rows; // headers are used implicitly by index
+      const [headers, ...dataRows] = rows; 
       
       return dataRows.map((row, index) => ({
-        id: (index + 1).toString(), // Or use a more robust ID if available in CSV
+        id: (index + 1).toString(), 
         name: row[0] || `Apartment ${index + 1}`,
         sqMeters: parseFloat(row[1]) || 50,
         numWindows: parseInt(row[2]) || 2,
-        windowDirections: row[3] ? row[3].split(';').map(d => d.trim()).filter(d => d) : [], // Changed to split by semicolon
+        windowDirections: row[3] ? row[3].split(';').map(d => d.trim()).filter(d => d) : [], 
         totalWindowSize: parseFloat(row[4]) || 10,
         // row[5] is Floor Level, currently not in schema
-        numBedrooms: parseInt(row[6]) || 1, // Corrected index
-        numBathrooms: parseFloat(row[7]) || 1, // Corrected index and parseFloat
-        hasDishwasher: row[8]?.toLowerCase() === 'true', // Corrected index
-        hasWasher: row[9]?.toLowerCase() === 'true', // Corrected index
-        hasDryer: row[10]?.toLowerCase() === 'true', // Corrected index
-        tenants: parseInt(row[11]) || 0, // Corrected index
-        allowRoommates: row[12]?.toLowerCase() !== 'false', // Corrected index
+        numBedrooms: parseInt(row[6]) || 1, 
+        numBathrooms: parseFloat(row[7]) || 1, 
+        hasDishwasher: row[8]?.toLowerCase() === 'true', 
+        hasWasher: row[9]?.toLowerCase() === 'true', 
+        hasDryer: row[10]?.toLowerCase() === 'true', 
+        tenants: parseInt(row[11]) || 0, 
+        allowRoommates: row[12]?.toLowerCase() !== 'false', 
       }));
     } catch (error) {
       console.error('Error loading apartments, returning empty array:', error);
-      // If the file doesn't exist or is unreadable, return an empty array.
-      // The sample data generation is removed as the CSV is the source of truth.
       return [];
     }
   }
@@ -85,7 +83,7 @@ export class CSVHandler {
     
     const headers = [
       'Name', 'SqMeters', 'NumWindows', 'WindowDirections', 'TotalWindowSize',
-      'FloorLevel', // Added to maintain CSV structure
+      'FloorLevel', 
       'NumBedrooms', 'NumBathrooms', 'HasDishwasher', 'HasWasher', 'HasDryer',
       'Tenants', 'AllowRoommates'
     ];
@@ -94,9 +92,9 @@ export class CSVHandler {
       apt.name,
       apt.sqMeters.toString(),
       apt.numWindows.toString(),
-      apt.windowDirections.join(';'), // Changed to join by semicolon
+      apt.windowDirections.join(';'), 
       apt.totalWindowSize.toString(),
-      (apt as any).floorLevel || "1", // Placeholder for FloorLevel if not in schema
+      (apt as any).floorLevel || "1", 
       apt.numBedrooms.toString(),
       apt.numBathrooms.toString(),
       apt.hasDishwasher.toString(),
@@ -118,16 +116,31 @@ export class CSVHandler {
       const rows = await this.parseCSV(content);
       const [headers, ...dataRows] = rows;
       
-      return dataRows.map((row, index) => ({
-        id: row[0] || (index + 1).toString(), // Use existing ID or generate new
-        name: row[1] || '', // Corrected index for name
-        encryptedData: row[2] || '', // Corrected index for encryptedData
-        allowRoommates: row[3]?.toLowerCase() === 'true', // Corrected index for allowRoommates
-        assignedRoom: row[4] || undefined, // Corrected index for assignedRoom
-        requiredPayment: row[5] ? parseFloat(row[5]) : undefined, // Corrected index for requiredPayment
-      }));
+      const hasIdColumn = headers[0]?.trim().toLowerCase() === 'id';
+
+      return dataRows.map((row, index) => {
+        if (hasIdColumn) {
+          return {
+            id: row[0] || (index + 1).toString(), // Use existing ID or generate new if empty
+            name: row[1] || '',
+            encryptedData: row[2] || '',
+            allowRoommates: row[3]?.toLowerCase() === 'true',
+            assignedRoom: row[4] || undefined,
+            requiredPayment: row[5] ? parseFloat(row[5]) : undefined,
+          };
+        } else {
+          // Assuming format: Name, EncryptedData, AllowRoommates, AssignedRoom, RequiredPayment
+          return {
+            id: (index + 1).toString(), // Generate ID
+            name: row[0] || '',
+            encryptedData: row[1] || '',
+            allowRoommates: row[2]?.toLowerCase() === 'true',
+            assignedRoom: row[3] || undefined,
+            requiredPayment: row[4] ? parseFloat(row[4]) : undefined,
+          };
+        }
+      });
     } catch (error) {
-      // Return empty array if file doesn't exist
       return [];
     }
   }
@@ -135,10 +148,10 @@ export class CSVHandler {
   async savePeople(people: Person[]): Promise<void> {
     await this.ensureDataDirectory();
     
-    const headers = ['ID', 'Name', 'EncryptedData', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment']; // Added ID to headers
+    const headers = ['ID', 'Name', 'EncryptedData', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment']; 
     
     const rows = people.map(person => [
-      person.id, // Include ID when saving
+      person.id, 
       person.name,
       person.encryptedData,
       person.allowRoommates.toString(),
