@@ -413,6 +413,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Clear all submissions and reset apartment data
+  app.post("/api/admin/reset-submissions", async (req, res) => {
+    try {
+      // Clear all people from storage
+      storage.setPeople([]);
+      await csvHandler.savePeople([]); // Clear people.csv
+      await csvHandler.savePeopleCleartext([]); // Clear peoplec.csv
+
+      // Reset all apartments in storage
+      const apartments = await storage.getApartments();
+      for (const apartment of apartments) {
+        await storage.updateApartment(apartment.id, {
+          tenants: 0,
+          allowRoommates: true, // Reset to true
+        });
+      }
+      await csvHandler.saveApartments(await storage.getApartments()); // Save updated apartments
+
+      // Clear any existing matching results
+      await storage.clearMatchingResults();
+
+      // Delete bidding_assignments.csv if it exists
+      if (fs.existsSync(BIDDING_ASSIGNMENTS_CSV_PATH)) {
+        await fs.promises.unlink(BIDDING_ASSIGNMENTS_CSV_PATH);
+      }
+
+      res.json({ message: "All submissions and assignments reset successfully." });
+    } catch (error) {
+      console.error("Error resetting submissions:", error);
+      res.status(500).json({ message: "Failed to reset submissions." });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

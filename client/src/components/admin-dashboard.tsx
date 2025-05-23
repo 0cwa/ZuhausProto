@@ -18,7 +18,8 @@ import {
   Loader2,
   PlusCircle,
   DollarSign, // Import DollarSign icon
-  Building2 // Icon for full apartments
+  Building2, // Icon for full apartments
+  Eraser // Icon for reset
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -55,6 +56,27 @@ export function AdminDashboard() {
       toast({
         title: "Error Running Matching",
         description: error.message || "Failed to run matching algorithm",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const resetSubmissionsMutation = useMutation({
+    mutationFn: () => apiRequest("POST", "/api/admin/reset-submissions"),
+    onSuccess: () => {
+      toast({
+        title: "Reset Complete",
+        description: "All submissions and assignments have been cleared.",
+      });
+      // Invalidate all relevant queries to refetch fresh data
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apartments"] });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error Resetting",
+        description: error.message || "Failed to reset submissions",
         variant: "destructive",
       });
     },
@@ -303,6 +325,26 @@ export function AdminDashboard() {
               <>
                 <Save className="mr-2 h-4 w-4" />
                 Assign Rooms
+              </>
+            )}
+          </Button>
+
+          <Button
+            onClick={() => resetSubmissionsMutation.mutate()}
+            disabled={resetSubmissionsMutation.isPending}
+            variant="destructive"
+            size="lg"
+            className="bg-red-500 hover:bg-red-600"
+          >
+            {resetSubmissionsMutation.isPending ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Resetting...
+              </>
+            ) : (
+              <>
+                <Eraser className="mr-2 h-4 w-4" />
+                Reset Submissions
               </>
             )}
           </Button>
