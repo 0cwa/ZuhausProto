@@ -37,12 +37,13 @@ export class CSVHandler {
       // Use the synchronous parse function
       records = parse(content, {
         columns: false, // Do not assume first row is headers
-        skip_empty_lines: true,
+        // skip_empty_lines: true, // Temporarily disable to debug if it's skipping valid lines
         trim: true, // Trim whitespace from each cell
         delimiter: ',', // Explicitly set delimiter to comma
         relax_column_count: true, // Allow rows to have a different number of columns
         skip_records_with_error: true, // Skip records that cause parsing errors
         cast: false, // Do not cast values, keep them as strings
+        record_delimiter: ['\n', '\r\n'], // Explicitly define common record delimiters
         on_record_error: (err) => {
           console.error(`[CSVHandler] CSV parsing record error: ${err.message}`);
           return null; // Return null to skip the record
@@ -81,7 +82,9 @@ export class CSVHandler {
     try {
       console.log(`[CSVHandler] Attempting to load apartments from: ${APARTMENT_CSV}`); // Added log for debugging path
       const content = await fs.readFile(APARTMENT_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
+      console.log(`[CSVHandler] Raw content of ${APARTMENT_CSV} (first 500 chars):\n${content.substring(0, 500)}`);
       const rows = await this.parseCSV(content);
+      console.log(`[CSVHandler] Parsed rows from ${APARTMENT_CSV}:`, rows);
       
       // Ensure rows is an array and has at least one row (headers)
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -150,7 +153,9 @@ export class CSVHandler {
     try {
       console.log(`[CSVHandler] Attempting to load people from: ${PEOPLE_CSV}`); // Added log for debugging path
       const content = await fs.readFile(PEOPLE_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
+      console.log(`[CSVHandler] Raw content of ${PEOPLE_CSV} (first 500 chars):\n${content.substring(0, 500)}`);
       const rows = await this.parseCSV(content);
+      console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CSV}:`, rows);
       
       // Ensure rows is an array and has at least one row (headers)
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -176,6 +181,7 @@ export class CSVHandler {
           // Assuming format: Name, EncryptedData, AllowRoommates, AssignedRoom, RequiredPayment
           return {
             id: (index + 1).toString(), // Generate ID
+
             name: row[0] || '',
             encryptedData: row[1] || '',
             allowRoommates: row[2]?.toLowerCase() === 'true',
@@ -214,7 +220,9 @@ export class CSVHandler {
     try {
       console.log(`[CSVHandler] Attempting to load people_cleartext from: ${PEOPLE_CLEARTEXT_CSV}`); // Added log for debugging path
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
+      console.log(`[CSVHandler] Raw content of ${PEOPLE_CLEARTEXT_CSV} (first 500 chars):\n${content.substring(0, 500)}`);
       const rows = await this.parseCSV(content);
+      console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CLEARTEXT_CSV}:`, rows);
 
       // Ensure rows is an array and has at least one row (headers)
       if (!Array.isArray(rows) || rows.length < 1) { 
