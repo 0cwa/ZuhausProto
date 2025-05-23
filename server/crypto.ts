@@ -47,10 +47,16 @@ export class ECKeyPair {
       this.privateKey = keyPair.privateKey;
       this.publicKey = keyPair.publicKey;
 
-      // Save new keys to files
-      await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
-      await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
-      console.log('New EC key pair generated and saved to files.');
+      // Ensure keys are not null before exporting
+      if (this.privateKey && this.publicKey) {
+        // Save new keys to files
+        await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
+        await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
+        console.log('New EC key pair generated and saved to files.');
+      } else {
+        console.error('Failed to generate EC key pair.');
+        throw new Error('Failed to generate EC key pair.');
+      }
     }
   }
 
@@ -89,6 +95,7 @@ export class ECKeyPair {
       // 1. Create ECDH instance with server's private key
       const ecdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
       // Set the server's private key for key derivation
+      // The export format 'sec1' is specific to EC private keys and is often expected by setPrivateKey.
       ecdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
 
       // 2. Derive shared secret using client's ephemeral public key
