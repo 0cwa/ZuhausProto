@@ -47,7 +47,7 @@ export const personPreferencesSchema = z.object({
   wakeTime: z.tuple([z.number(), z.number()]).optional(), // [min, max] linear minutes
 });
 
-// Person data schema
+// Person data schema (for people.csv - encrypted)
 export const personSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -55,6 +55,16 @@ export const personSchema = z.object({
   allowRoommates: z.boolean(),
   assignedRoom: z.string().optional(),
   requiredPayment: z.number().optional(),
+});
+
+// Person data schema (for peoplec.csv - cleartext preferences)
+export const personCleartextSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  allowRoommates: z.boolean(),
+  assignedRoom: z.string().optional(),
+  requiredPayment: z.number().optional(),
+  preferences: personPreferencesSchema, // Directly include preferences
 });
 
 // Form submission schema
@@ -86,6 +96,7 @@ export const matchingResultSchema = z.object({
 export type Apartment = z.infer<typeof apartmentSchema>;
 export type PersonPreferences = z.infer<typeof personPreferencesSchema>;
 export type Person = z.infer<typeof personSchema>;
+export type PersonCleartext = z.infer<typeof personCleartextSchema>; // New type
 export type FormSubmission = z.infer<typeof formSubmissionSchema>;
 export type AdminAuth = z.infer<typeof adminAuthSchema>;
 export type MatchingResult = z.infer<typeof matchingResultSchema>;

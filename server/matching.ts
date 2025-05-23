@@ -1,9 +1,8 @@
-import { Apartment, Person, PersonPreferences, MatchingResult } from '@shared/schema';
+import { Apartment, Person, PersonPreferences, MatchingResult, PersonCleartext } from '@shared/schema'; // Import PersonCleartext
 import { serverKeyPair } from './crypto';
 
-interface DecodedPerson extends Person {
-  preferences: PersonPreferences;
-}
+// DecodedPerson will now directly contain preferences
+interface DecodedPerson extends PersonCleartext {}
 
 interface RoommateGroup {
   members: DecodedPerson[];
@@ -19,15 +18,24 @@ interface ApartmentBid {
 }
 
 export class MatchingEngine {
-  private async decryptPersonData(person: Person): Promise<DecodedPerson> {
+  // This method is now simplified as preferences are directly available
+  private decryptPersonData(person: Person): DecodedPerson {
+    // In this debugging mode, 'person' is actually a PersonCleartext object
+    // that has been cast to Person for compatibility with existing types.
+    // We need to parse its 'encryptedData' field as preferences.
     try {
-      // Ensure serverKeyPair.decrypt is awaited as it's now async
-      const decryptedData = await serverKeyPair.decrypt(person.encryptedData);
-      const preferences = JSON.parse(decryptedData) as PersonPreferences;
-      return { ...person, preferences };
+      const preferences = JSON.parse(person.encryptedData) as PersonPreferences;
+      return { 
+        id: person.id,
+        name: person.name,
+        allowRoommates: person.allowRoommates,
+        assignedRoom: person.assignedRoom,
+        requiredPayment: person.requiredPayment,
+        preferences: preferences,
+      };
     } catch (error) {
-      console.error(`Failed to decrypt data for person ${person.name}: ${error}`);
-      throw new Error(`Failed to decrypt data for person ${person.name}`);
+      console.error(`Failed to parse preferences for person ${person.name}: ${error}`);
+      throw new Error(`Failed to parse preferences for person ${person.name}`);
     }
   }
 
@@ -242,9 +250,10 @@ export class MatchingEngine {
   }
 
   async runMatching(people: Person[], apartments: Apartment[]): Promise<MatchingResult[]> {
-    // Decrypt all people data first
-    const decodedPeoplePromises = people.map(person => this.decryptPersonData(person));
-    const decodedPeople = await Promise.all(decodedPeoplePromises); // Await all decryption
+    // In debugging mode, 'people' is actually an array of PersonCleartext objects
+    // that have been cast to Person for compatibility with existing types.
+    // We need to map them to DecodedPerson by parsing their 'encryptedData' field as preferences.
+    const decodedPeople: DecodedPerson[] = people.map(person => this.decryptPersonData(person));
 
     const groups = this.formRoommateGroups(decodedPeople);
     

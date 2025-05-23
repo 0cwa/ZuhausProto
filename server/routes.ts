@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { serverKeyPair } from "./crypto";
 import { csvHandler } from "./csv-handler";
 import { matchingEngine } from "./matching";
-import { formSubmissionSchema, adminAuthSchema } from "@shared/schema";
+import { formSubmissionSchema, adminAuthSchema, PersonCleartext } from "@shared/schema"; // Import PersonCleartext
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -16,8 +16,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   try {
     const apartments = await csvHandler.loadApartments();
     const people = await csvHandler.loadPeople();
+    const peopleCleartext = await csvHandler.loadPeopleCleartext(); // Load cleartext data
+    
     storage.setApartments(apartments);
-    storage.setPeople(people);
+    // For debugging, set people in storage from cleartext data if available
+    // Otherwise, use encrypted data and matching engine will decrypt
+    if (peopleCleartext.length > 0) {
+      // Convert PersonCleartext to Person for storage compatibility
+      const peopleForStorage = peopleCleartext.map(p => ({
+        id: p.id,
+        name: p.name,
+        allowRoommates: p.allowRoommates,
+        assignedRoom: p.assignedRoom,
+        requiredPayment: p.requiredPayment,
+        encryptedData: JSON.stringify(p.preferences), // Store preferences as encryptedData for now
+      }));
+      storage.setPeople(peopleForStorage);
+    } else {
+      storage.setPeople(people);
+    }
+
   } catch (error) {
     console.error('Error loading CSV data:', error);
   }
@@ -167,22 +185,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = formSubmissionSchema.parse(req.body);
       
-      // Check if name already exists
-      const existingPerson = await storage.getPersonByName(data.name);
-      if (existingPerson) {
+      // Check if name already exists in cleartext data
+      const existingPeopleCleartext = await csvHandler.loadPeopleCleartext();
+      if (existingPeopleCleartext.some(p => p.name === data.name)) {
         return res.status(409).json({ message: "Name already exists" });
       }
       
-      // Create new person
+      // Create new person (encrypted)
       const person = await storage.createPerson({
         name: data.name,
         encryptedData: data.encryptedData,
         allowRoommates: data.allowRoommates,
       });
       
-      // Update CSV file
+      // Update encrypted CSV file
       const people = await storage.getPeople();
       await csvHandler.savePeople(people);
+
+      // --- DEBUGGING: Save cleartext preferences to peoplec.csv ---
+      const decryptedPreferences = serverKeyPair.decrypt(data.encryptedData); // Decrypt here
+      const newPersonCleartext: PersonCleartext = {
+        id: person.id,
+        name: person.name,
+        allowRoommates: person.allowRoommates,
+        assignedRoom: person.assignedRoom,
+        requiredPayment: person.requiredPayment,
+        preferences: JSON.parse(decryptedPreferences),
+      };
+      const allPeopleCleartext = await csvHandler.loadPeopleCleartext();
+      allPeopleCleartext.push(newPersonCleartext);
+      await csvHandler.savePeopleCleartext(allPeopleCleartext);
+      // --- END DEBUGGING BLOCK ---
       
       res.json({ message: "Preferences submitted successfully", id: person.id });
     } catch (error) {
@@ -209,7 +242,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get people status for admin
   app.get("/api/admin/people-status", async (req, res) => {
     try {
-      const people = await storage.getPeople();
+      // For debugging, load from cleartext CSV if available
+      const people = await csvHandler.loadPeopleCleartext(); 
       
       const status = people.map(person => ({
         id: person.id,
@@ -222,6 +256,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json(status);
     } catch (error) {
+      console.error("Error in /api/admin/people-status:", error);
       res.status(500).json({ message: "Failed to get people status" });
     }
   });
@@ -229,11 +264,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Run matching algorithm
   app.post("/api/admin/run-matching", async (req, res) => {
     try {
-      const people = await storage.getPeople();
+      // --- DEBUGGING: Load people from cleartext CSV ---
+      const peopleCleartext = await csvHandler.loadPeopleCleartext();
+      // Convert PersonCleartext to Person for matching engine compatibility
+      const peopleForMatching = peopleCleartext.map(p => ({
+        id: p.id,
+        name: p.name,
+        allowRoommates: p.allowRoommates,
+        assignedRoom: p.assignedRoom,
+        requiredPayment: p.requiredPayment,
+        encryptedData: JSON.stringify(p.preferences), // Temporarily store preferences here
+      }));
+      // --- END DEBUGGING BLOCK ---
+
       const apartments = await storage.getApartments();
       
       // Filter out already assigned people
-      const unassignedPeople = people.filter(person => !person.assignedRoom);
+      const unassignedPeople = peopleForMatching.filter(person => !person.assignedRoom);
       
       if (unassignedPeople.length === 0) {
         return res.json({ message: "No unassigned people to match", results: [] });
@@ -264,15 +311,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No matching results found. Run matching first." });
       }
       
-      // Update people with assignments
+      // Update people with assignments in cleartext CSV
+      const allPeopleCleartext = await csvHandler.loadPeopleCleartext();
       for (const result of matchingResults) {
         for (const assignedPerson of result.assignedPeople) {
-          await storage.updatePerson(assignedPerson.id, {
-            assignedRoom: result.apartmentName,
-            requiredPayment: assignedPerson.payment,
-          });
+          const personIndex = allPeopleCleartext.findIndex(p => p.id === assignedPerson.id);
+          if (personIndex !== -1) {
+            allPeopleCleartext[personIndex].assignedRoom = result.apartmentName;
+            allPeopleCleartext[personIndex].requiredPayment = assignedPerson.payment;
+          }
         }
       }
+      await csvHandler.savePeopleCleartext(allPeopleCleartext);
+
+      // Also update encrypted people.csv for consistency (though not used for matching now)
+      const allPeopleEncrypted = await csvHandler.loadPeople();
+      for (const result of matchingResults) {
+        for (const assignedPerson of result.assignedPeople) {
+          const personIndex = allPeopleEncrypted.findIndex(p => p.id === assignedPerson.id);
+          if (personIndex !== -1) {
+            allPeopleEncrypted[personIndex].assignedRoom = result.apartmentName;
+            allPeopleEncrypted[personIndex].requiredPayment = assignedPerson.payment;
+          }
+        }
+      }
+      await csvHandler.savePeople(allPeopleEncrypted);
       
       // Update apartments with new tenant counts and roommate availability
       for (const result of matchingResults) {
@@ -289,9 +352,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       // Save to CSV files
-      const people = await storage.getPeople();
       const apartments = await storage.getApartments();
-      await csvHandler.savePeople(people);
       await csvHandler.saveApartments(apartments);
       
       // Clear matching results

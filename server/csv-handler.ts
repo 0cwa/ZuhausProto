@@ -1,10 +1,11 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { Apartment, Person } from '@shared/schema';
+import { Apartment, Person, PersonCleartext, PersonPreferences } from '@shared/schema';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const APARTMENT_CSV = path.join(DATA_DIR, 'apartment_data.csv');
 const PEOPLE_CSV = path.join(DATA_DIR, 'people.csv');
+const PEOPLE_CLEARTEXT_CSV = path.join(DATA_DIR, 'peoplec.csv'); // New file for cleartext data
 
 export class CSVHandler {
   async ensureDataDirectory(): Promise<void> {
@@ -162,6 +163,49 @@ export class CSVHandler {
     
     const csvContent = await this.stringifyCSV([headers, ...rows]);
     await fs.writeFile(PEOPLE_CSV, csvContent, 'utf8');
+  }
+
+  // New methods for cleartext people data (for debugging)
+  async loadPeopleCleartext(): Promise<PersonCleartext[]> {
+    await this.ensureDataDirectory();
+    try {
+      const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
+      const rows = await this.parseCSV(content);
+      const [headers, ...dataRows] = rows;
+
+      // Dynamically map headers to indices for robustness
+      const headerMap = new Map(headers.map((h, i) => [h.trim(), i]));
+
+      return dataRows.map(row => {
+        const preferences: PersonPreferences = JSON.parse(row[headerMap.get('Preferences')!] || '{}');
+        return {
+          id: row[headerMap.get('ID')!],
+          name: row[headerMap.get('Name')!],
+          allowRoommates: row[headerMap.get('AllowRoommates')!]?.toLowerCase() === 'true',
+          assignedRoom: row[headerMap.get('AssignedRoom')!] || undefined,
+          requiredPayment: row[headerMap.get('RequiredPayment')!] ? parseFloat(row[headerMap.get('RequiredPayment')!]) : undefined,
+          preferences: preferences,
+        };
+      });
+    } catch (error) {
+      console.warn('Error loading cleartext people data, returning empty array:', error);
+      return [];
+    }
+  }
+
+  async savePeopleCleartext(people: PersonCleartext[]): Promise<void> {
+    await this.ensureDataDirectory();
+    const headers = ['ID', 'Name', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment', 'Preferences'];
+    const rows = people.map(person => [
+      person.id,
+      person.name,
+      person.allowRoommates.toString(),
+      person.assignedRoom || '',
+      person.requiredPayment?.toString() || '',
+      JSON.stringify(person.preferences), // Store preferences as JSON string
+    ]);
+    const csvContent = await this.stringifyCSV([headers, ...rows]);
+    await fs.writeFile(PEOPLE_CLEARTEXT_CSV, csvContent, 'utf8');
   }
 }
 
