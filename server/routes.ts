@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { serverKeyPair } from "./crypto"; // Import the RSAKeyPair instance
+import { serverKeyPair } from "./crypto";
 import { csvHandler } from "./csv-handler";
 import { matchingEngine } from "./matching";
 import { formSubmissionSchema, adminAuthSchema } from "@shared/schema";
@@ -9,7 +9,7 @@ import { formSubmissionSchema, adminAuthSchema } from "@shared/schema";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize RSA key pair (load from file or generate new)
+  // Initialize EC key pair (load from file or generate new)
   await serverKeyPair.init();
 
   // Initialize data from CSV files
@@ -33,7 +33,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hash: publicKeyHash,
       });
     } catch (error) {
-      console.error("Error in /api/public-key:", error); // Log the actual error
+      console.error("Error in /api/public-key:", error);
       res.status(500).json({ message: "Failed to get public key" });
     }
   });
