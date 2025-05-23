@@ -56,7 +56,7 @@ const formSchema = z.object({
   quietness: z.number().min(0).max(100).optional(),
   guests: z.number().min(0).max(100).optional(),
   personalSpace: z.number().min(0).max(100).optional(),
-  sleepTime: z.tuple([z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX), z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEP_TIME_SLIDER_MAX)])
+  sleepTime: z.tuple([z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX), z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX)])
     .refine(data => data[0] <= data[1], { message: "Min sleep time must be less than or equal to max" }).optional(),
   wakeTime: z.tuple([z.number().min(WAKE_TIME_SLIDER_MIN).max(WAKE_TIME_SLIDER_MAX), z.number().min(WAKE_TIME_SLIDER_MIN).max(WAKE_TIME_SLIDER_MAX)])
     .refine(data => data[0] <= data[1], { message: "Min wake time must be less than or equal to max" }).optional(),
