@@ -160,29 +160,66 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     try {
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
-      const rows = await this.parseCSV(content); // Use the new csv-parse based parser
+      console.log(`[CSVHandler] Read content from ${PEOPLE_CLEARTEXT_CSV}: ${content.substring(0, 200)}...`);
+      const rows = await this.parseCSV(content);
+      console.log(`[CSVHandler] Parsed ${rows.length} rows from peoplec.csv`);
+
+      if (rows.length < 1) { // Check if there are any rows at all
+          console.warn(`[CSVHandler] peoplec.csv is empty or contains no processable rows. Returning empty array.`);
+          return [];
+      }
+      
       const [headers, ...dataRows] = rows;
+      if (!headers || headers.length === 0) {
+        console.warn(`[CSVHandler] peoplec.csv contains no header row. Returning empty array.`);
+        return [];
+      }
+      console.log(`[CSVHandler] Headers from peoplec.csv: ${headers.join(', ')}`);
 
-      // Dynamically map headers to indices for robustness
-      const headerMap = new Map(headers.map((h, i) => [h.trim(), i])); // Corrected: map key to index
+      if (dataRows.length === 0) {
+        console.warn(`[CSVHandler] peoplec.csv contains no data rows after headers. Returning empty array.`);
+        return [];
+      }
 
-      return dataRows.map(row => {
-        let preferencesString = row[headerMap.get('Preferences')!] || '{}';
-        // Unescape internal double quotes for JSON.parse
-        preferencesString = preferencesString.replace(/""/g, '"');
-        const preferences: PersonPreferences = JSON.parse(preferencesString);
-        return {
-          id: row[headerMap.get('ID')!],
-          name: row[headerMap.get('Name')!],
-          allowRoommates: row[headerMap.get('AllowRoommates')!]?.toLowerCase() === 'true',
-          assignedRoom: row[headerMap.get('AssignedRoom')!] || undefined,
-          requiredPayment: row[headerMap.get('RequiredPayment')!] ? parseFloat(row[headerMap.get('RequiredPayment')!]) : undefined,
-          preferences: preferences,
-        };
-      });
+      const headerMap = new Map(headers.map((h, i) => [h.trim(), i]));
+
+      return dataRows.map((row, rowIndex) => {
+        try {
+          const idColIdx = headerMap.get('ID');
+          const nameColIdx = headerMap.get('Name');
+          const allowRoommatesColIdx = headerMap.get('AllowRoommates');
+          const preferencesColIdx = headerMap.get('Preferences');
+          const assignedRoomColIdx = headerMap.get('AssignedRoom');
+          const requiredPaymentColIdx = headerMap.get('RequiredPayment');
+
+          if (idColIdx === undefined || nameColIdx === undefined || preferencesColIdx === undefined) {
+            console.error(`[CSVHandler] Missing critical columns (ID, Name, or Preferences) in peoplec.csv headers. Row ${rowIndex} will be skipped.`);
+            throw new Error("Missing critical columns in peoplec.csv");
+          }
+          
+          let preferencesString = row[preferencesColIdx] || '{}';
+          // console.log(`[CSVHandler] Row ${rowIndex} raw preferences string before JSON.parse: '${preferencesString}'`);
+
+          const preferences: PersonPreferences = JSON.parse(preferencesString);
+          
+          const personData: PersonCleartext = {
+            id: row[idColIdx],
+            name: row[nameColIdx],
+            allowRoommates: row[allowRoommatesColIdx!]?.toLowerCase() === 'true',
+            assignedRoom: row[assignedRoomColIdx!] || undefined,
+            requiredPayment: row[requiredPaymentColIdx!] ? parseFloat(row[requiredPaymentColIdx!]) : undefined,
+            preferences: preferences,
+          };
+          // console.log(`[CSVHandler] Successfully parsed row ${rowIndex}: ${personData.name}`);
+          return personData;
+
+        } catch (parseRowError) {
+          console.error(`[CSVHandler] Error parsing row ${rowIndex} in peoplec.csv. Row data: [${row.join(',')}]`, parseRowError);
+          return null; // Return null for rows that fail to parse
+        }
+      }).filter(person => person !== null) as PersonCleartext[]; // Filter out nulls
     } catch (error) {
-      console.warn('Error loading cleartext people data, returning empty array:', error);
-      console.warn(error); // Log the full error for more context
+      console.error('[CSVHandler] Error loading or processing peoplec.csv:', error);
       return [];
     }
   }
