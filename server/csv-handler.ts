@@ -26,14 +26,25 @@ export class CSVHandler {
 
   // Replaced custom parseCSV with csv-parse library
   async parseCSV(content: string): Promise<string[][]> {
+    console.log(`[CSVHandler] parseCSV received content length: ${content.length}`);
+    if (content.length === 0) {
+      console.warn("[CSVHandler] parseCSV received empty content.");
+      return [];
+    }
+
     const records = await parse(content, {
       columns: false, // Do not assume first row is headers
       skip_empty_lines: true,
       trim: true, // Trim whitespace from each cell
-      // Revert delimiter to default (comma) as columns are comma-separated
-      // The semicolon is *within* a cell, not a column delimiter.
-      // csv-parse should handle unquoted semicolons within a field if the primary delimiter is a comma.
+      delimiter: ',', // Explicitly set delimiter to comma
+      relax_column_count: true, // Allow rows to have a different number of columns
+      skip_records_with_error: true, // Skip records that cause parsing errors
+      on_record_error: (err) => {
+        console.error(`[CSVHandler] CSV parsing record error: ${err.message}`);
+        return null; // Return null to skip the record
+      },
     });
+    console.log(`[CSVHandler] parseCSV returned ${records.length} records.`);
     return records as string[][];
   }
 
@@ -54,7 +65,7 @@ export class CSVHandler {
     
     try {
       console.log(`[CSVHandler] Attempting to load apartments from: ${APARTMENT_CSV}`); // Added log for debugging path
-      const content = await fs.readFile(APARTMENT_CSV, 'utf8');
+      const content = await fs.readFile(APARTMENT_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
       const rows = await this.parseCSV(content);
       
       // Ensure rows is an array and has at least one row (headers)
@@ -123,7 +134,7 @@ export class CSVHandler {
     
     try {
       console.log(`[CSVHandler] Attempting to load people from: ${PEOPLE_CSV}`); // Added log for debugging path
-      const content = await fs.readFile(PEOPLE_CSV, 'utf8');
+      const content = await fs.readFile(PEOPLE_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
       const rows = await this.parseCSV(content);
       
       // Ensure rows is an array and has at least one row (headers)
@@ -187,7 +198,7 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     try {
       console.log(`[CSVHandler] Attempting to load people_cleartext from: ${PEOPLE_CLEARTEXT_CSV}`); // Added log for debugging path
-      const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
+      const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
       const rows = await this.parseCSV(content);
 
       // Ensure rows is an array and has at least one row (headers)
