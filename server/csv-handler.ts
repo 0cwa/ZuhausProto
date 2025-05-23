@@ -2,6 +2,11 @@ import fs from 'fs/promises';
 import path from 'path';
 import { parse } from 'csv-parse'; // Import the csv-parse library
 import { Apartment, Person, PersonCleartext, PersonPreferences } from '@shared/schema';
+import { fileURLToPath } from 'url'; // Import fileURLToPath
+
+// Get the current directory name in an ES module compatible way
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Assuming this file (csv-handler.ts) is in a 'server' directory,
 // and the 'data' directory is a sibling to 'server' (e.g., project_root/data)
