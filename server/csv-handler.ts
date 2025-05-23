@@ -27,7 +27,7 @@ export class CSVHandler {
 
   // Replaced custom parseCSV with csv-parse library
   async parseCSV(content: string): Promise<string[][]> {
-    console.log(`[CSVHandler] parseCSV received content length: ${content.length}`);
+    // console.log(`[CSVHandler] parseCSV received content length: ${content.length}`); // Disabled
     if (content.length === 0) {
       console.warn("[CSVHandler] parseCSV received empty content. Returning empty array.");
       return [];
@@ -61,7 +61,7 @@ export class CSVHandler {
       return [];
     }
     
-    console.log(`[CSVHandler] parseCSV returned ${records.length} records.`);
+    // console.log(`[CSVHandler] parseCSV returned ${records.length} records.`); // Disabled
     return records as string[][];
   }
 
@@ -85,11 +85,11 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     
     try {
-      console.log(`[CSVHandler] Attempting to load apartments from: ${APARTMENT_CSV}`); // Added log for debugging path
+      // console.log(`[CSVHandler] Attempting to load apartments from: ${APARTMENT_CSV}`); // Disabled
       const content = await fs.readFile(APARTMENT_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
-      console.log(`[CSVHandler] Raw content of ${APARTMENT_CSV} (first 500 chars):\n${content.substring(0, 500)}`);
+      // console.log(`[CSVHandler] Raw content of ${APARTMENT_CSV} (first 500 chars):\n${content.substring(0, 500)}`); // Disabled
       const rows = await this.parseCSV(content);
-      console.log(`[CSVHandler] Parsed rows from ${APARTMENT_CSV}:`, rows);
+      // console.log(`[CSVHandler] Parsed rows from ${APARTMENT_CSV}:`, rows); // Disabled
       
       // Ensure rows is an array and has at least one row (headers)
       if (!Array.isArray(rows) || rows.length === 0) {
@@ -156,11 +156,11 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     
     try {
-      console.log(`[CSVHandler] Attempting to load people from: ${PEOPLE_CSV}`); // Added log for debugging path
+      // console.log(`[CSVHandler] Attempting to load people from: ${PEOPLE_CSV}`); // Disabled
       const content = await fs.readFile(PEOPLE_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
-      console.log(`[CSVHandler] Raw content of ${PEOPLE_CSV} (first 500 chars):\n${content.substring(0, 500)}`);
+      // console.log(`[CSVHandler] Raw content of ${PEOPLE_CSV} (first 500 chars):\n${content.substring(0, 500)}`); // Disabled
       const rows = await this.parseCSV(content);
-      console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CSV}:`, rows);
+      // console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CSV}:`, rows); // Disabled
       
       // Ensure rows is an array and has at least one row (headers)
       if (!Array.isArray(rows) || rows.length < 1) {
@@ -242,11 +242,11 @@ export class CSVHandler {
   async loadPeopleCleartext(): Promise<PersonCleartext[]> {
     await this.ensureDataDirectory();
     try {
-      console.log(`[CSVHandler] Attempting to load people_cleartext from: ${PEOPLE_CLEARTEXT_CSV}`); // Added log for debugging path
+      // console.log(`[CSVHandler] Attempting to load people_cleartext from: ${PEOPLE_CLEARTEXT_CSV}`); // Disabled
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, { encoding: 'utf8', flag: 'r' }); // Explicitly set flag 'r' and encoding
-      console.log(`[CSVHandler] Raw content of ${PEOPLE_CLEARTEXT_CSV} (first 500 chars):\n${content.substring(0, 500)}`);
+      // console.log(`[CSVHandler] Raw content of ${PEOPLE_CLEARTEXT_CSV} (first 500 chars):\n${content.substring(0, 500)}`); // Disabled
       const rows = await this.parseCSV(content);
-      console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CLEARTEXT_CSV}:`, rows);
+      // console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CLEARTEXT_CSV}:`, rows); // Disabled
 
       // Ensure rows is an array and has at least one row (headers)
       if (!Array.isArray(rows) || rows.length < 1) { 
