@@ -87,7 +87,11 @@ export function AdminDashboard() {
   const totalSubmissions = peopleStatus?.length || 0;
   const allowingRoommates = peopleStatus?.filter((p: any) => p.allowRoommates).length || 0;
   const assignedPeople = peopleStatus?.filter((p: any) => p.isAssigned).length || 0;
+  
   const totalApartments = apartmentsData?.length || 0;
+  const assignedApartmentsCount = apartmentsData?.filter((apt: any) => 
+    apt.tenants > 0 && (apt.tenants === apt.numBedrooms || apt.allowRoommates === false)
+  ).length || 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -162,9 +166,9 @@ export function AdminDashboard() {
               <div className="flex items-center space-x-3">
                 <Home className="h-8 w-8 text-blue-600" />
                 <div>
-                  <p className="text-sm text-slate-600">Total Apartments</p>
+                  <p className="text-sm text-slate-600">Assigned Apartments</p>
                   <p className="text-2xl font-bold text-slate-900">
-                    {isLoadingApartments ? <Loader2 className="h-6 w-6 animate-spin" /> : totalApartments}
+                    {isLoadingApartments ? <Loader2 className="h-6 w-6 animate-spin" /> : `${assignedApartmentsCount}/${totalApartments}`}
                   </p>
                 </div>
               </div>
