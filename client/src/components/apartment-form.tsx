@@ -272,72 +272,50 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   }, [watchedValues, onApartmentCountChange]);
 
   const onSubmit = async (data: FormData) => {
-    console.log("Attempting form submission...");
-    console.log("Form data:", data);
-    console.log("Form state before submission:", form.formState);
-
-    if (!serverPublicKey) { // Still useful as a guard, even if key is dummy
-      toast({
-        title: "Configuration Error",
-        description: "Client is not properly configured (missing server key placeholder).",
-        variant: "destructive",
-      });
-      console.error("Configuration Error: Missing server public key placeholder.");
-      return;
-    }
     setIsSubmitting(true);
     try {
       const { name, allowRoommates, ...preferences } = data;
-      const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey);
-      console.log("Sending data to API:", { name, allowRoommates, encryptedData });
+      const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey || ""); // Pass empty string if undefined
+      
       await apiRequest("POST", "/api/submit-preferences", {
         name,
         allowRoommates,
         encryptedData,
       });
+
       toast({
-        title: "Success",
-        description: "Your preferences have been submitted successfully!",
-        variant: "default", 
+        title: "Success!",
+        description: "Your preferences have been submitted successfully.",
+        variant: "default",
       });
       form.reset(); // Reset form to default values
-      console.log("Form reset after successful submission.");
-      // The formState.isValid will be true after reset if defaultValues are valid
-      // and formState.isSubmitted will be false.
     } catch (error: any) {
-      console.error("Submission error caught:", error);
-      let displayMessage = "Failed to submit preferences. Please try again.";
-      // apiRequest throws an error with message like "STATUS: Text"
-      if (error.message && error.message.includes("409")) { 
-        displayMessage = "This name has already been submitted. Please use a different name.";
-      } else if (error.message) {
-        // Extract a more user-friendly message if possible, otherwise use the generic one
-        const parts = error.message.split("::");
+      let errorMessage = "Failed to submit preferences. Please try again.";
+      if (error.message) {
+        // Attempt to parse the error message from apiRequest
+        const parts = error.message.split(":");
         if (parts.length > 1) {
           try {
-            const jsonError = JSON.parse(parts[1].trim());
+            const jsonError = JSON.parse(parts.slice(1).join(":").trim());
             if (jsonError.message) {
-              displayMessage = jsonError.message;
+              errorMessage = jsonError.message;
+            } else if (jsonError.detail) { // Sometimes errors might have a 'detail' field
+              errorMessage = jsonError.detail;
             }
           } catch (e) {
-            // If parsing fails, use the latter part of the error or the generic message
-             if (parts[1] && parts[1].trim().length > 0 && parts[1].trim().length < 100) {
-                displayMessage = parts[1].trim();
-             }
+            // If JSON parsing fails, use the raw message or a truncated version
+            errorMessage = error.message.length < 100 ? error.message : "An unexpected error occurred.";
           }
-        } else if (error.message.length < 100) { // Show shorter raw errors
-            displayMessage = error.message;
         }
       }
+
       toast({
         title: "Submission Error",
-        description: displayMessage,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsSubmitting(false);
-      console.log("Form submission process finished. isSubmitting set to false.");
-      console.log("Final form state:", form.formState);
     }
   };
 
