@@ -3,7 +3,9 @@ import path from 'path';
 import { parse } from 'csv-parse'; // Import the csv-parse library
 import { Apartment, Person, PersonCleartext, PersonPreferences } from '@shared/schema';
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
+// Assuming this file (csv-handler.ts) is in a 'server' directory,
+// and the 'data' directory is a sibling to 'server' (e.g., project_root/data)
+const DATA_DIR = path.resolve(__dirname, '../data');
 const APARTMENT_CSV = path.join(DATA_DIR, 'apartment_data.csv');
 const PEOPLE_CSV = path.join(DATA_DIR, 'people.csv');
 const PEOPLE_CLEARTEXT_CSV = path.join(DATA_DIR, 'peoplec.csv'); // New file for cleartext data
@@ -43,6 +45,7 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     
     try {
+      console.log(`[CSVHandler] Attempting to load apartments from: ${APARTMENT_CSV}`); // Added log for debugging path
       const content = await fs.readFile(APARTMENT_CSV, 'utf8');
       const rows = await this.parseCSV(content);
       const [headers, ...dataRows] = rows; 
@@ -65,7 +68,7 @@ export class CSVHandler {
         allowRoommates: row[12]?.toLowerCase() !== 'false', 
       }));
     } catch (error) {
-      console.error('Error loading apartments, returning empty array:', error);
+      console.error(`Error loading apartments from ${APARTMENT_CSV}, returning empty array:`, error);
       return [];
     }
   }
@@ -104,6 +107,7 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     
     try {
+      console.log(`[CSVHandler] Attempting to load people from: ${PEOPLE_CSV}`); // Added log for debugging path
       const content = await fs.readFile(PEOPLE_CSV, 'utf8');
       const rows = await this.parseCSV(content);
       const [headers, ...dataRows] = rows;
@@ -133,6 +137,7 @@ export class CSVHandler {
         }
       });
     } catch (error) {
+      console.error(`Error loading people from ${PEOPLE_CSV}, returning empty array:`, error);
       return [];
     }
   }
@@ -159,25 +164,20 @@ export class CSVHandler {
   async loadPeopleCleartext(): Promise<PersonCleartext[]> {
     await this.ensureDataDirectory();
     try {
+      console.log(`[CSVHandler] Attempting to load people_cleartext from: ${PEOPLE_CLEARTEXT_CSV}`); // Added log for debugging path
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
-      console.log(`[CSVHandler] Read content from ${PEOPLE_CLEARTEXT_CSV}: ${content.substring(0, 300)}...`); // Log more content
       const rows = await this.parseCSV(content);
-      console.log(`[CSVHandler] Parsed ${rows.length} rows from peoplec.csv`);
 
       if (rows.length < 1) { 
-          console.warn(`[CSVHandler] peoplec.csv is empty or contains no processable rows. Returning empty array.`);
           return [];
       }
       
       const [headers, ...dataRows] = rows;
       if (!headers || headers.length === 0) {
-        console.warn(`[CSVHandler] peoplec.csv contains no header row. Returning empty array.`);
         return [];
       }
-      console.log(`[CSVHandler] Headers from peoplec.csv: ${headers.join(', ')}`);
 
       if (dataRows.length === 0) {
-        console.warn(`[CSVHandler] peoplec.csv contains no data rows after headers. Returning empty array.`);
         return [];
       }
 
@@ -198,8 +198,6 @@ export class CSVHandler {
           }
           
           let preferencesString = row[preferencesColIdx] || '{}';
-          // Log the exact string being passed to JSON.parse
-          console.log(`[CSVHandler] Row ${rowIndex} (ID: ${row[idColIdx]}) raw preferences string before JSON.parse: '${preferencesString}'`);
           
           const preferences: PersonPreferences = JSON.parse(preferencesString);
           
@@ -211,21 +209,19 @@ export class CSVHandler {
             requiredPayment: row[requiredPaymentColIdx!] ? parseFloat(row[requiredPaymentColIdx!]) : undefined,
             preferences: preferences,
           };
-          // console.log(`[CSVHandler] Successfully parsed row ${rowIndex}: ${personData.name}`);
           return personData;
 
         } catch (parseRowError) {
           console.error(`[CSVHandler] Error parsing row ${rowIndex} in peoplec.csv. Row data: [${row.join(',')}]`, parseRowError);
-          return null; // Return null for rows that fail to parse
+          return null; 
         }
-      }).filter(person => person !== null) as PersonCleartext[]; // Filter out nulls
+      }).filter(person => person !== null) as PersonCleartext[]; 
     } catch (error) {
-      // If the file does not exist, return an empty array instead of throwing an error
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        console.warn(`[CSVHandler] peoplec.csv not found at ${PEOPLE_CLEARTEXT_CSV}. Returning empty array.`);
+        console.warn(`[CSVHandler] ${PEOPLE_CLEARTEXT_CSV} not found. Returning empty array.`);
         return [];
       }
-      console.error('[CSVHandler] Error loading or processing peoplec.csv:', error);
+      console.error(`[CSVHandler] Error loading or processing ${PEOPLE_CLEARTEXT_CSV}:`, error);
       return [];
     }
   }
@@ -234,40 +230,19 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     const headers = ['ID', 'Name', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment', 'Preferences'];
     
-    // Read existing people data first
-    let existingPeople: PersonCleartext[] = [];
-    try {
-      existingPeople = await this.loadPeopleCleartext();
-    } catch (error) {
-      // If loadPeopleCleartext throws an error (e.g., file not found), it will return [],
-      // so this catch block might not be strictly necessary if loadPeopleCleartext handles ENOENT.
-      // However, it's good practice to be explicit.
-      console.error("Error loading existing people cleartext data for saving:", error);
-      // If there's an error loading, we proceed with just the new data to avoid data loss.
-      // Or, depending on desired behavior, you might re-throw or handle differently.
-    }
-
-    // Combine existing people with the new people data.
-    // Assuming 'peopleToSave' contains the new person(s) to be added.
-    // If 'peopleToSave' is intended to be the *entire* new state, then this merge logic needs adjustment.
-    // For appending, we want to add the new items to the existing list.
-    const allPeople = [...existingPeople, ...peopleToSave];
-
-    const rows = allPeople.map(person => [
+    // The peopleToSave parameter is assumed to be the complete, authoritative list.
+    const rows = peopleToSave.map(person => [
       person.id,
       person.name,
       person.allowRoommates.toString(),
       person.assignedRoom || '',
       person.requiredPayment?.toString() || '',
-      JSON.stringify(person.preferences), // Store preferences as JSON string
+      JSON.stringify(person.preferences), 
     ]);
     
-    // Always include headers when writing the full file
     const dataToWrite = [headers, ...rows];
 
     const csvContent = await this.stringifyCSV(dataToWrite);
-    // Use 'w' flag to overwrite the file with the complete, updated content
-    // This ensures the file is always consistent and includes all records.
     await fs.writeFile(PEOPLE_CLEARTEXT_CSV, csvContent, 'utf8');
   }
 }
