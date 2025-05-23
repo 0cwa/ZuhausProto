@@ -53,6 +53,13 @@ export class CSVHandler {
       console.log(`[CSVHandler] Attempting to load apartments from: ${APARTMENT_CSV}`); // Added log for debugging path
       const content = await fs.readFile(APARTMENT_CSV, 'utf8');
       const rows = await this.parseCSV(content);
+      
+      // Ensure rows is an array and has at least one row (headers)
+      if (!Array.isArray(rows) || rows.length === 0) {
+        console.warn(`[CSVHandler] ${APARTMENT_CSV} is empty or malformed. Returning empty array.`);
+        return [];
+      }
+
       const [headers, ...dataRows] = rows; 
       
       return dataRows.map((row, index) => ({
@@ -115,6 +122,13 @@ export class CSVHandler {
       console.log(`[CSVHandler] Attempting to load people from: ${PEOPLE_CSV}`); // Added log for debugging path
       const content = await fs.readFile(PEOPLE_CSV, 'utf8');
       const rows = await this.parseCSV(content);
+      
+      // Ensure rows is an array and has at least one row (headers)
+      if (!Array.isArray(rows) || rows.length === 0) {
+        console.warn(`[CSVHandler] ${PEOPLE_CSV} is empty or malformed. Returning empty array.`);
+        return [];
+      }
+
       const [headers, ...dataRows] = rows;
       
       const hasIdColumn = headers[0]?.trim().toLowerCase() === 'id';
@@ -173,7 +187,9 @@ export class CSVHandler {
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
       const rows = await this.parseCSV(content);
 
-      if (rows.length < 1) { 
+      // Ensure rows is an array and has at least one row (headers)
+      if (!Array.isArray(rows) || rows.length < 1) { 
+          console.warn(`[CSVHandler] ${PEOPLE_CLEARTEXT_CSV} is empty or malformed. Returning empty array.`);
           return [];
       }
       
