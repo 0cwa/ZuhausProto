@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { RoommateSection } from "./roommate-section";
 import { encryptData } from "@/lib/crypto"; // This will now be a no-op base64 encode
 import { apiRequest } from "@/lib/queryClient";
-import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
+import { Loader2, Send, User, Home, Users, DollarSign, CheckCircle, RefreshCcw } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 // Min/max for sleep time slider (linear minutes, 7 PM to 5 AM next day)
@@ -85,6 +85,7 @@ interface IndividualCountState {
 
 export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: ApartmentFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmissionSuccessful, setIsSubmissionSuccessful] = useState(false);
   const { toast } = useToast();
 
   const [individualCounts, setIndividualCounts] = useState<IndividualCountState>({
@@ -104,7 +105,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   });
 
   const form = useForm<FormData>({
-    // resolver: zodResolver(formSchema), // <--- COMMENTED OUT TO DISABLE VALIDATION
+    resolver: zodResolver(formSchema), // Re-enabled Zod validation
     defaultValues: {
       name: "",
       sqMeters: [20, 200], 
@@ -273,39 +274,42 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
 
   const onSubmit = async (data: FormData) => {
     setIsSubmitting(true);
+    setIsSubmissionSuccessful(false); // Reset success state on new submission attempt
     try {
       const { name, allowRoommates, ...preferences } = data;
-      const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey || ""); // Pass empty string if undefined
+      const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey || ""); 
       
-      await apiRequest("POST", "/api/submit-preferences", {
+      const response = await apiRequest("POST", "/api/submit-preferences", {
         name,
         allowRoommates,
         encryptedData,
       });
+      const responseData = await response.json();
 
+      setIsSubmissionSuccessful(true);
       toast({
         title: "Success!",
-        description: "Your preferences have been submitted successfully.",
+        description: responseData.message || "Your preferences have been submitted successfully.",
         variant: "default",
       });
-      form.reset(); // Reset form to default values
+      form.reset(); 
     } catch (error: any) {
       let errorMessage = "Failed to submit preferences. Please try again.";
       if (error.message) {
-        // Attempt to parse the error message from apiRequest
         const parts = error.message.split(":");
         if (parts.length > 1) {
           try {
             const jsonError = JSON.parse(parts.slice(1).join(":").trim());
             if (jsonError.message) {
               errorMessage = jsonError.message;
-            } else if (jsonError.detail) { // Sometimes errors might have a 'detail' field
+            } else if (jsonError.detail) { 
               errorMessage = jsonError.detail;
             }
           } catch (e) {
-            // If JSON parsing fails, use the raw message or a truncated version
             errorMessage = error.message.length < 100 ? error.message : "An unexpected error occurred.";
           }
+        } else {
+          errorMessage = error.message; // Use the error message directly if not in expected format
         }
       }
 
@@ -317,6 +321,11 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleNewSubmission = () => {
+    setIsSubmissionSuccessful(false);
+    form.reset(); // Ensure form is reset to default values for a new submission
   };
 
   const formatTime = (minutes: number) => {
@@ -332,6 +341,30 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     if (count === null) return <Badge variant="outline">Loading...</Badge>;
     return <Badge variant="outline" className="text-green-600 border-green-600">{count} apartments match</Badge>;
   };
+
+  if (isSubmissionSuccessful) {
+    return (
+      <Card className="text-center">
+        <CardHeader>
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100 mb-4">
+            <CheckCircle className="h-6 w-6 text-green-600" />
+          </div>
+          <CardTitle className="text-2xl font-bold text-slate-900">
+            Preferences Submitted!
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-slate-600">
+            Thank you! Your preferences have been successfully recorded.
+          </p>
+          <Button onClick={handleNewSubmission} variant="outline" size="lg">
+            <RefreshCcw className="mr-2 h-4 w-4" />
+            Submit Another Application
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
