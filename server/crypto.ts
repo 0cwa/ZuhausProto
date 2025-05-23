@@ -44,17 +44,19 @@ export class ECKeyPair {
         privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
+      // Assign directly from keyPair result
       this.privateKey = keyPair.privateKey;
       this.publicKey = keyPair.publicKey;
 
       // Ensure keys are not null before exporting
       if (this.privateKey && this.publicKey) {
         // Save new keys to files
+        // Explicitly call export on the KeyObject instances
         await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
         await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
         console.log('New EC key pair generated and saved to files.');
       } else {
-        console.error('Failed to generate EC key pair.');
+        console.error('Failed to generate EC key pair: privateKey or publicKey is null.');
         throw new Error('Failed to generate EC key pair.');
       }
     }
