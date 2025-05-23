@@ -398,6 +398,9 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             <Home className="h-5 w-5 text-primary" />
             Apartment Specifications
           </CardTitle>
+          <p className="text-sm text-slate-600">
+            "Worth" is the amount your maximum "ideal apartment" bid will be lowered by if a characteristic is not available in the apartment you bid on.
+          </p>
         </CardHeader>
         <CardContent className="space-y-8">
           {/* Square Meters */}
@@ -427,7 +430,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Worth to me if missing</Label>
+              <Label>Worth</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input
@@ -469,7 +472,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Worth to me if missing</Label>
+              <Label>Worth</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input
@@ -511,7 +514,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Worth to me if missing</Label>
+              <Label>Worth</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input
@@ -553,7 +556,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Worth to me if missing</Label>
+              <Label>Worth</Label>
               <div className="relative">
                 <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                 <Input
@@ -597,7 +600,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <Label className="text-xs whitespace-nowrap">Worth if missing</Label>
+                    <Label className="text-xs whitespace-nowrap">Worth</Label>
                     <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                         <Input
@@ -639,7 +642,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <Label className="text-xs whitespace-nowrap">Worth if missing</Label>
+                    <Label className="text-xs whitespace-nowrap">Worth</Label>
                     <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                         <Input
@@ -677,7 +680,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                     {renderCountBadge(count)}
                   </div>
                   <div className="space-y-2">
-                    <Label className="text-xs whitespace-nowrap">Worth if missing</Label>
+                    <Label className="text-xs whitespace-nowrap">Worth</Label>
                     <div className="relative">
                         <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-slate-400" />
                         <Input
