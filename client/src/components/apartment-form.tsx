@@ -292,13 +292,21 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       toast({
         title: "Success",
         description: "Your preferences have been submitted successfully!",
+        variant: "default", // Explicitly set variant for success
       });
       // Reset the form and its submission state
       form.reset(form.getValues(), { keepErrors: false, keepDirty: false, keepIsSubmitted: false, keepTouched: false, keepIsValid: false, keepSubmitCount: false });
     } catch (error: any) {
+      const errorMessage = error.message || "Failed to submit preferences";
+      let displayMessage = "Failed to submit preferences.";
+      if (errorMessage.includes("409")) { // Check for 409 Conflict status
+        displayMessage = "Name already exists. Please choose a different name.";
+      } else {
+        displayMessage = errorMessage;
+      }
       toast({
         title: "Error",
-        description: error.message || "Failed to submit preferences",
+        description: displayMessage,
         variant: "destructive",
       });
     } finally {
