@@ -40,9 +40,9 @@ export class ECKeyPair {
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
 
-      // When loading, also get the raw private key bytes
+      // Extract raw private key bytes from the loaded PEM using a temporary ECDH instance
       const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      tempEcdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
+      tempEcdh.setPrivateKey(privateKeyPem, 'pem'); // Set from PEM string
       rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
 
       console.log('EC key pair loaded from files.');
@@ -50,25 +50,21 @@ export class ECKeyPair {
       // If files don't exist or are unreadable, generate new keys
       console.warn('EC key pair files not found or unreadable. Generating new keys...');
       
-      // Generate key pair. publicKey and privateKey will be PEM strings due to encoding options.
       const keyPairGenerated = crypto.generateKeyPairSync('ec', {
         namedCurve: EC_ALGORITHM_DETAILS.name,
         publicKeyEncoding: EC_ALGORITHM_DETAILS.publicKeyEncoding,
         privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
-      // keyPairGenerated.privateKey and keyPairGenerated.publicKey are already PEM strings
       privateKeyPem = keyPairGenerated.privateKey as string;
       publicKeyPem = keyPairGenerated.publicKey as string;
 
-      // Create KeyObjects from the PEM strings for internal use by the class
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
 
-      // Get raw private key bytes from the KeyObject for ECDH
+      // Extract raw private key bytes from the newly generated PEM using a temporary ECDH instance
       const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      // Now this.privateKey is a KeyObject, so .export() is valid
-      tempEcdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
+      tempEcdh.setPrivateKey(privateKeyPem, 'pem'); // Set from PEM string
       rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
 
       // Save new PEM keys to files
