@@ -30,6 +30,10 @@ export function AdminDashboard() {
     queryKey: ["/api/admin/matching-results"],
   });
 
+  const { data: apartmentsData, isLoading: isLoadingApartments } = useQuery({
+    queryKey: ["/api/apartments"],
+  });
+
   const runMatchingMutation = useMutation({
     mutationFn: () => apiRequest("POST", "/api/admin/run-matching"),
     onSuccess: (response) => {
@@ -59,6 +63,7 @@ export function AdminDashboard() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/apartments"] }); // Invalidate apartments to get updated tenant counts
     },
     onError: () => {
       toast({
@@ -72,6 +77,7 @@ export function AdminDashboard() {
   const refreshData = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] });
     queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/apartments"] }); // Refresh apartment data as well
     toast({
       title: "Data Refreshed",
       description: "All data has been refreshed from the server",
@@ -81,6 +87,7 @@ export function AdminDashboard() {
   const totalSubmissions = peopleStatus?.length || 0;
   const allowingRoommates = peopleStatus?.filter((p: any) => p.allowRoommates).length || 0;
   const assignedPeople = peopleStatus?.filter((p: any) => p.isAssigned).length || 0;
+  const totalApartments = apartmentsData?.length || 0;
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -155,8 +162,10 @@ export function AdminDashboard() {
               <div className="flex items-center space-x-3">
                 <Home className="h-8 w-8 text-blue-600" />
                 <div>
-                  <p className="text-sm text-slate-600">Available Apartments</p>
-                  <p className="text-2xl font-bold text-slate-900">47</p>
+                  <p className="text-sm text-slate-600">Total Apartments</p>
+                  <p className="text-2xl font-bold text-slate-900">
+                    {isLoadingApartments ? <Loader2 className="h-6 w-6 animate-spin" /> : totalApartments}
+                  </p>
                 </div>
               </div>
             </CardContent>
