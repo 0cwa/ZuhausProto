@@ -1,3 +1,20 @@
 ApartmentName,PersonID,PersonName,ExpectedPayment,AdjustedBid,GroupWinningBid,SecondHighestBidForApt,GroupMembersInWinningBid
-CozyCrest,2,test,1000.0,1000,1000.0,1000.0,test
-EnchantedNatura,3,Shmo,0.0,1000,1000.0,0.0,Shmo
+EnchantedNatura,7,Dummy Person 7,1361.24,1557.67,4673.00,0.00,"Dummy Person 7, Dummy Person 16, Dummy Person 10"
+EnchantedNatura,16,Dummy Person 16,1197.35,1557.67,4673.00,0.00,"Dummy Person 7, Dummy Person 16, Dummy Person 10"
+EnchantedNatura,10,Dummy Person 10,1946.41,1557.67,4673.00,0.00,"Dummy Person 7, Dummy Person 16, Dummy Person 10"
+CharmingPerch,14,Dummy Person 14,1770.43,2034.50,4069.00,0.00,"Dummy Person 14, Dummy Person 19"
+CharmingPerch,19,Dummy Person 19,2123.57,2034.50,4069.00,0.00,"Dummy Person 14, Dummy Person 19"
+QuirkyWhisper,4,Dummy Person 4,1488.23,1597.50,3195.00,0.00,"Dummy Person 4, Dummy Person 9"
+QuirkyWhisper,9,Dummy Person 9,1398.77,1597.50,3195.00,0.00,"Dummy Person 4, Dummy Person 9"
+TranquilAurora,2,test,980.51,1026.33,3079.00,0.00,"test, Dummy Person 17, Dummy Person 11"
+TranquilAurora,17,Dummy Person 17,943.25,1026.33,3079.00,0.00,"test, Dummy Person 17, Dummy Person 11"
+TranquilAurora,11,Dummy Person 11,1095.23,1026.33,3079.00,0.00,"test, Dummy Person 17, Dummy Person 11"
+CozyHideaway,6,Dummy Person 6,2285.00,2490.00,2490.00,0.00,Dummy Person 6
+SpaciousRetreat,12,Dummy Person 12,1099.16,1175.50,2351.00,0.00,"Dummy Person 12, Dummy Person 13"
+SpaciousRetreat,13,Dummy Person 13,1197.84,1175.50,2351.00,0.00,"Dummy Person 12, Dummy Person 13"
+CozyPerch,8,Dummy Person 8,2205.00,2297.00,2297.00,0.00,Dummy Person 8
+CozyCrest,18,Dummy Person 18,1914.00,2267.00,2267.00,0.00,Dummy Person 18
+EmeraldLoft,15,Dummy Person 15,486.68,979.50,1959.00,0.00,"Dummy Person 15, Dummy Person 20"
+EmeraldLoft,20,Dummy Person 20,570.32,979.50,1959.00,0.00,"Dummy Person 15, Dummy Person 20"
+VibrantEcho,3,Shmo,718.00,1000.00,1000.00,0.00,Shmo
+GoldenDreamscape,5,Dummy Person 5,0.00,859.00,859.00,0.00,Dummy Person 5
