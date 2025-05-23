@@ -36,9 +36,10 @@ export function generateIdenticon(canvas: HTMLCanvasElement, value: string, size
   for (let x = 0; x < gridSize; x++) {
     for (let y = 0; y < gridSize; y++) {
       // Use hash bits to determine if cell should be filled
-      const bitIndex = (y * gridSize + x) % 32;
-      const shouldFill = (Math.abs(hash) >> bitIndex) & 1;
-      
+      // Ensure bitIndex is within 0-31 for 32-bit integer
+      const bitIndex = (y * gridSize + x) % 32; 
+      const shouldFill = (Math.abs(hash) >>> bitIndex) & 1; // Use unsigned right shift >>>
+
       if (shouldFill) {
         // Create symmetrical pattern
         const mirrorX = gridSize - 1 - x;
