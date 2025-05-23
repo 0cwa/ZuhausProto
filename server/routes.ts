@@ -7,7 +7,7 @@ import { matchingEngine } from "./matching";
 import { formSubmissionSchema, adminAuthSchema, PersonCleartext, MatchingResult } from "@shared/schema";
 import path from 'path';
 import { fileURLToPath } from 'url';
-import fs from 'fs/promises'; // Import fs.promises for file operations
+import * as fs from 'fs/promises'; // Import fs.promises correctly
 import { generateRandomPreferences } from "./utils"; // Import the new utility
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
