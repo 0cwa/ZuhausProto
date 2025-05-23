@@ -209,17 +209,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get people status for admin
   app.get("/api/admin/people-status", async (req, res) => {
     try {
-      // Load from storage (which is sourced from people.csv)
-      const people = await storage.getPeople(); 
+      // Load directly from peoplec.csv for admin panel display
+      const peopleCleartext = await csvHandler.loadPeopleCleartext(); 
       
-      const status = people.map(person => ({
+      const status = peopleCleartext.map(person => ({
         id: person.id,
         name: person.name,
         allowRoommates: person.allowRoommates,
         isAssigned: !!person.assignedRoom,
         assignedRoom: person.assignedRoom,
         requiredPayment: person.requiredPayment,
-        // Note: encryptedData is not sent to client for this status endpoint
+        // Preferences are not sent to client for this status endpoint
       }));
       
       res.json(status);
