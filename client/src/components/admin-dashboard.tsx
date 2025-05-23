@@ -16,7 +16,8 @@ import {
   Save, 
   RefreshCw,
   Loader2,
-  PlusCircle
+  PlusCircle,
+  DollarSign // Import DollarSign icon
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -117,6 +118,11 @@ export function AdminDashboard() {
     apt.tenants > 0 && (apt.tenants === apt.numBedrooms || apt.allowRoommates === false)
   ).length || 0;
 
+  // Calculate total payment owed
+  const totalPaymentOwed = peopleStatus?.reduce((sum: number, person: any) => {
+    return sum + (person.requiredPayment || 0);
+  }, 0) || 0;
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -194,6 +200,19 @@ export function AdminDashboard() {
                   <p className="text-2xl font-bold text-slate-900">
                     {isLoadingApartments ? <Loader2 className="h-6 w-6 animate-spin" /> : `${assignedApartmentsCount}/${totalApartments}`}
                   </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* New Card for Total Payment Owed */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <DollarSign className="h-8 w-8 text-purple-600" />
+                <div>
+                  <p className="text-sm text-slate-600">Total Payment Owed</p>
+                  <p className="text-2xl font-bold text-slate-900">${totalPaymentOwed.toFixed(2)}</p>
                 </div>
               </div>
             </CardContent>
@@ -311,7 +330,7 @@ export function AdminDashboard() {
                       </TableCell>
                       <TableCell>{person.assignedRoom || "-"}</TableCell>
                       <TableCell>
-                        {person.requiredPayment ? `$${person.requiredPayment}` : "-"}
+                        {person.requiredPayment ? `$${person.requiredPayment.toFixed(2)}` : "-"}
                       </TableCell>
                     </TableRow>
                   ))}
