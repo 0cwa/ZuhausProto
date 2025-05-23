@@ -336,6 +336,50 @@ export function AdminDashboard() {
           </div>
         </div>
 
+        {/* Matching Results */}
+        {matchingResults && matchingResults.length > 0 && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-primary" />
+                Matching Results
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Apartment</TableHead>
+                    <TableHead>Assigned People</TableHead>
+                    <TableHead>Individual Payments</TableHead>
+                    <TableHead>Total Payment</TableHead>
+                    <TableHead>Occupancy</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {matchingResults.map((result: any) => (
+                    <TableRow key={result.apartmentId}>
+                      <TableCell className="font-medium">{result.apartmentName}</TableCell>
+                      <TableCell>
+                        {result.assignedPeople.map((person: any) => person.name).join(", ")}
+                      </TableCell>
+                      <TableCell>
+                        {result.assignedPeople.map((person: any) => `$${person.payment.toFixed(2)}`).join(" / ")}
+                      </TableCell>
+                      <TableCell className="font-medium">${result.totalPayment.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <Badge variant={result.tenants >= result.capacity ? "default" : "outline"}>
+                          {result.tenants}/{result.capacity} {result.tenants >= result.capacity ? "Full" : "Available"}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        )}
+
         {/* People Status Table */}
         <Card className="mb-8">
           <CardHeader>
@@ -386,50 +430,6 @@ export function AdminDashboard() {
             )}
           </CardContent>
         </Card>
-
-        {/* Matching Results */}
-        {matchingResults && matchingResults.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-primary" />
-                Matching Results
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Apartment</TableHead>
-                    <TableHead>Assigned People</TableHead>
-                    <TableHead>Individual Payments</TableHead>
-                    <TableHead>Total Payment</TableHead>
-                    <TableHead>Occupancy</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {matchingResults.map((result: any) => (
-                    <TableRow key={result.apartmentId}>
-                      <TableCell className="font-medium">{result.apartmentName}</TableCell>
-                      <TableCell>
-                        {result.assignedPeople.map((person: any) => person.name).join(", ")}
-                      </TableCell>
-                      <TableCell>
-                        {result.assignedPeople.map((person: any) => `$${person.payment.toFixed(2)}`).join(" / ")}
-                      </TableCell>
-                      <TableCell className="font-medium">${result.totalPayment.toFixed(2)}</TableCell>
-                      <TableCell>
-                        <Badge variant={result.tenants >= result.capacity ? "default" : "outline"}>
-                          {result.tenants}/{result.capacity} {result.tenants >= result.capacity ? "Full" : "Available"}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        )}
       </main>
     </div>
   );
