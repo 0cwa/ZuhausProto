@@ -394,7 +394,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/matching-results", async (req, res) => {
     try {
       const results = await storage.getMatchingResults();
-      res.json(results);
+      // FIX: Await storage.getApartments() before calling find
+      const apartments = await storage.getApartments(); 
+
+      const resultsWithApartmentDetails = results.map(result => {
+        const apartment = apartments.find(apt => apt.id === result.apartmentId);
+        return {
+          ...result,
+          capacity: apartment ? apartment.numBedrooms : result.capacity, // Use actual capacity from apartment data
+        };
+      });
+
+      res.json(resultsWithApartmentDetails);
     } catch (error) {
       console.error("Error in /api/admin/matching-results:", error);
       res.status(500).json({ message: "Failed to get matching results" });
