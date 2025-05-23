@@ -17,7 +17,8 @@ import {
   RefreshCw,
   Loader2,
   PlusCircle,
-  DollarSign // Import DollarSign icon
+  DollarSign, // Import DollarSign icon
+  Building2 // Icon for full apartments
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,6 +124,39 @@ export function AdminDashboard() {
     return sum + (person.requiredPayment || 0);
   }, 0) || 0;
 
+  // Calculate number of full apartments based on capacity and maxRoommates preference
+  const fullApartmentsCount = matchingResults?.filter((result: any) => {
+    const apartment = apartmentsData?.find((apt: any) => apt.id === result.apartmentId);
+    if (!apartment) return false;
+
+    // An apartment is "full" if:
+    // 1. It's at its bedroom capacity.
+    const atCapacity = result.tenants >= apartment.numBedrooms;
+
+    // 2. All assigned people in the apartment have reached their maxRoommates preference.
+    //    This requires looking up each person's preferences.
+    const allRoommatesMaxedOut = result.assignedPeople.every((assignedPerson: any) => {
+      const personDetails = peopleStatus?.find((p: any) => p.id === assignedPerson.id);
+      // If personDetails or preferences are missing, assume they are fine (or handle as an error)
+      if (!personDetails || !personDetails.preferences) return false; 
+      
+      // A person's maxRoommates preference is for *other* roommates.
+      // So, if a group has N members, each person has N-1 roommates.
+      // If (N-1) >= person's maxRoommates, then this person is "full".
+      const actualRoommates = result.assignedPeople.length - 1;
+      return actualRoommates >= (personDetails.preferences.maxRoommates || 0);
+    });
+
+    // An apartment is considered "full" if it's at capacity OR if all its tenants
+    // have reached their individual maxRoommates preference (meaning no one else wants more roommates).
+    // The `allowRoommates` property on the apartment itself is also a factor.
+    // If the apartment explicitly doesn't allow roommates, and it has tenants, it's "full" in that sense.
+    const apartmentDoesNotAllowMoreRoommates = !apartment.allowRoommates && result.tenants > 0;
+
+    return atCapacity || allRoommatesMaxedOut || apartmentDoesNotAllowMoreRoommates;
+  }).length || 0;
+
+
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -213,6 +247,19 @@ export function AdminDashboard() {
                 <div>
                   <p className="text-sm text-slate-600">Total Payment Owed</p>
                   <p className="text-2xl font-bold text-slate-900">${totalPaymentOwed.toFixed(2)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* New Card for Full Apartments */}
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center space-x-3">
+                <Building2 className="h-8 w-8 text-red-600" />
+                <div>
+                  <p className="text-sm text-slate-600">Full Apartments</p>
+                  <p className="text-2xl font-bold text-slate-900">{fullApartmentsCount}</p>
                 </div>
               </div>
             </CardContent>
