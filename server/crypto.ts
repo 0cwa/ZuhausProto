@@ -32,51 +32,33 @@ export class ECKeyPair {
     let publicKeyPem: string;
     let rawPrivateKeyBuffer: Buffer;
 
-    try {
-      // Try to load existing keys
-      privateKeyPem = await fs.readFile(PRIVATE_KEY_PATH, 'utf8');
-      publicKeyPem = await fs.readFile(PUBLIC_KEY_PATH, 'utf8');
-      
-      this.privateKey = crypto.createPrivateKey(privateKeyPem); 
-      this.publicKey = crypto.createPublicKey(publicKeyPem);
+    // --- TEMPORARY DEBUGGING: Force new key generation and direct raw byte extraction ---
+    // This bypasses file loading to isolate the issue.
+    console.warn('DEBUG MODE: Forcing new EC key generation and direct raw byte extraction.');
+    console.warn('Please delete the "keys" folder before restarting for this to take effect.');
 
-      // Extract raw private key bytes from the loaded KeyObject using JWK format
-      const jwk = this.privateKey.export({ format: 'jwk' }) as crypto.JsonWebKey;
-      if (!jwk.d) {
-        throw new Error('JWK private exponent "d" not found in loaded key.');
-      }
-      rawPrivateKeyBuffer = Buffer.from(jwk.d, 'base64url');
+    const keyPairGenerated = crypto.generateKeyPairSync('ec', {
+      namedCurve: EC_ALGORITHM_DETAILS.name,
+      publicKeyEncoding: EC_ALGORITHM_DETAILS.publicKeyEncoding,
+      privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
+    });
 
-      console.log('EC key pair loaded from files.');
-    } catch (error) {
-      // If files don't exist or are unreadable, generate new keys
-      console.warn('EC key pair files not found or unreadable. Generating new keys...');
-      
-      const keyPairGenerated = crypto.generateKeyPairSync('ec', {
-        namedCurve: EC_ALGORITHM_DETAILS.name,
-        publicKeyEncoding: EC_ALGORITHM_DETAILS.publicKeyEncoding,
-        privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
-      });
+    privateKeyPem = keyPairGenerated.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
+    publicKeyPem = keyPairGenerated.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
 
-      // Directly export the generated KeyObjects to PEM strings
-      privateKeyPem = keyPairGenerated.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
-      publicKeyPem = keyPairGenerated.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
+    this.privateKey = keyPairGenerated.privateKey;
+    this.publicKey = keyPairGenerated.publicKey;
 
-      this.privateKey = keyPairGenerated.privateKey;
-      this.publicKey = keyPairGenerated.publicKey;
+    // This is the critical part: get raw private key bytes directly from the generated KeyObject
+    // using the 'sec1' DER format, which is what ECDH.setPrivateKey expects.
+    rawPrivateKeyBuffer = this.privateKey.export({ format: 'der', type: 'sec1' }) as Buffer;
 
-      // Extract raw private key bytes from the newly generated KeyObject using JWK format
-      const jwk = this.privateKey.export({ format: 'jwk' }) as crypto.JsonWebKey;
-      if (!jwk.d) {
-        throw new Error('JWK private exponent "d" not found after generation.');
-      }
-      rawPrivateKeyBuffer = Buffer.from(jwk.d, 'base64url');
+    // Save new PEM keys to files (still save them for future persistence)
+    await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
+    await fs.writeFile(PUBLIC_KEY_PATH, publicKeyPem, 'utf8');
+    console.log('New EC key pair generated and saved to files (DEBUG MODE).');
+    // --- END TEMPORARY DEBUGGING BLOCK ---
 
-      // Save new PEM keys to files
-      await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
-      await fs.writeFile(PUBLIC_KEY_PATH, publicKeyPem, 'utf8');
-      console.log('New EC key pair generated and saved to files.');
-    }
     this.rawPrivateKeyBytes = rawPrivateKeyBuffer; // Store the raw bytes
   }
 
