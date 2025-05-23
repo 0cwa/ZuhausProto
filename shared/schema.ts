@@ -51,7 +51,7 @@ export const personPreferencesSchema = z.object({
 export const personSchema = z.object({
   id: z.string(),
   name: z.string(),
-  encryptedData: z.string(),
+  encryptedData: z.string(), // This will now be a JSON string containing iv, encryptedData, encryptedAesKey
   allowRoommates: z.boolean(),
   assignedRoom: z.string().optional(),
   requiredPayment: z.number().optional(),
@@ -61,7 +61,7 @@ export const personSchema = z.object({
 export const formSubmissionSchema = z.object({
   name: z.string().min(1, "Name is required"),
   allowRoommates: z.boolean(),
-  encryptedData: z.string(),
+  encryptedData: z.string(), // This will now be a base64 encoded JSON string
 });
 
 // Admin authentication schema

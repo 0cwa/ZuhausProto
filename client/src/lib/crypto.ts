@@ -1,8 +1,20 @@
 // Client-side encryption utilities using Web Crypto API
 
+const RSA_ALGORITHM = {
+  name: "RSA-OAEP",
+  hash: "SHA-256",
+};
+
+const AES_ALGORITHM = {
+  name: "AES-GCM",
+  length: 256, // 256-bit key
+};
+
+const IV_LENGTH = 12; // 96-bit IV for AES-GCM
+
 export async function encryptData(data: string, publicKeyPEM: string): Promise<string> {
   try {
-    // Convert PEM to ArrayBuffer
+    // 1. Import the RSA public key
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
     const pemFooter = "-----END PUBLIC KEY-----";
     const pemContents = publicKeyPEM.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
@@ -13,36 +25,52 @@ export async function encryptData(data: string, publicKeyPEM: string): Promise<s
       binaryDer[i] = binaryDerString.charCodeAt(i);
     }
 
-    // Import the public key
     const publicKey = await crypto.subtle.importKey(
       "spki",
       binaryDer.buffer,
-      {
-        name: "RSA-OAEP",
-        hash: "SHA-256",
-      },
+      RSA_ALGORITHM,
       false,
       ["encrypt"]
     );
 
-    // Encrypt the data
+    // 2. Generate a symmetric AES key
+    const aesKey = await crypto.subtle.generateKey(
+      AES_ALGORITHM,
+      true, // extractable
+      ["encrypt", "decrypt"]
+    );
+
+    // 3. Encrypt the data with the AES key
     const encodedData = new TextEncoder().encode(data);
-    const encryptedBuffer = await crypto.subtle.encrypt(
+    const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH)); // Generate a random IV
+    
+    const encryptedDataBuffer = await crypto.subtle.encrypt(
       {
-        name: "RSA-OAEP",
+        name: AES_ALGORITHM.name,
+        iv: iv,
       },
-      publicKey,
+      aesKey,
       encodedData
     );
 
-    // Convert to base64
-    const encryptedArray = new Uint8Array(encryptedBuffer);
-    let binaryString = '';
-    for (let i = 0; i < encryptedArray.length; i++) {
-      binaryString += String.fromCharCode(encryptedArray[i]);
-    }
+    // 4. Export the AES key and encrypt it with the RSA public key
+    const exportedAesKey = await crypto.subtle.exportKey("raw", aesKey);
+    const encryptedAesKeyBuffer = await crypto.subtle.encrypt(
+      RSA_ALGORITHM,
+      publicKey,
+      exportedAesKey
+    );
+
+    // 5. Combine IV, encrypted data, and encrypted AES key into a single string
+    const fullEncryptedData = {
+      iv: Array.from(iv), // Convert Uint8Array to array for JSON serialization
+      encryptedData: Array.from(new Uint8Array(encryptedDataBuffer)),
+      encryptedAesKey: Array.from(new Uint8Array(encryptedAesKeyBuffer)),
+    };
     
-    return btoa(binaryString);
+    // Stringify and base64 encode the combined object
+    return btoa(JSON.stringify(fullEncryptedData));
+
   } catch (error) {
     console.error('Encryption error:', error);
     throw new Error('Failed to encrypt data');
