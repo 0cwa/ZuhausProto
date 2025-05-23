@@ -178,11 +178,7 @@ export class CSVHandler {
 
       return dataRows.map(row => {
         let preferencesString = row[headerMap.get('Preferences')!] || '{}';
-        // Remove outer quotes if present and unescape internal double quotes
-        if (preferencesString.startsWith('"') && preferencesString.endsWith('"')) {
-          preferencesString = preferencesString.substring(1, preferencesString.length - 1);
-          preferencesString = preferencesString.replace(/""/g, '"');
-        }
+        // REMOVED: Manual unescaping logic. parseCSV should handle this.
         const preferences: PersonPreferences = JSON.parse(preferencesString);
         return {
           id: row[headerMap.get('ID')!],
