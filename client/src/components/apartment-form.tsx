@@ -99,8 +99,8 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     hasDryer: null,
   });
 
-  const { data: minMaxData } = useQuery({ // isLoadingMinMax removed as it's not used
-    queryKey: ["/api/apartments/min-max"], // This endpoint needs to be created
+  const { data: minMaxData } = useQuery({
+    queryKey: ["/api/apartments/min-max"],
   });
 
   const form = useForm<FormData>({
@@ -148,7 +148,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         numBathrooms: [minMaxData.numBathrooms.min, minMaxData.numBathrooms.max],
       });
     }
-  }, [minMaxData, form.reset, form]); // Added form to dependency array
+  }, [minMaxData, form.reset, form]);
 
 
   const watchedValues = form.watch();
@@ -293,7 +293,8 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         title: "Success",
         description: "Your preferences have been submitted successfully!",
       });
-      form.reset(); 
+      // Reset the form and its submission state
+      form.reset(form.getValues(), { keepErrors: false, keepDirty: false, keepIsSubmitted: false, keepTouched: false, keepIsValid: false, keepSubmitCount: false });
     } catch (error: any) {
       toast({
         title: "Error",
