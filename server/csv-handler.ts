@@ -164,11 +164,12 @@ export class CSVHandler {
       const [headers, ...dataRows] = rows;
 
       // Dynamically map headers to indices for robustness
-      const headerMap = new Map(headers.map((h, i) => h.trim(), i)); // Corrected: map key to index
+      const headerMap = new Map(headers.map((h, i) => [h.trim(), i])); // Corrected: map key to index
 
       return dataRows.map(row => {
-        // csv-parse should have already handled unquoting, so direct JSON.parse
-        const preferencesString = row[headerMap.get('Preferences')!] || '{}';
+        let preferencesString = row[headerMap.get('Preferences')!] || '{}';
+        // Unescape internal double quotes for JSON.parse
+        preferencesString = preferencesString.replace(/""/g, '"');
         const preferences: PersonPreferences = JSON.parse(preferencesString);
         return {
           id: row[headerMap.get('ID')!],
