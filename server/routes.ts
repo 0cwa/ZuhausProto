@@ -253,29 +253,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const currentPeople = await storage.getPeople();
       const currentPeopleCleartext = await csvHandler.loadPeopleCleartext();
-      let nextId = storage.getNextPersonId(); // Get the next available ID from storage
+      // Removed manual nextId tracking and setNextPersonId call here.
+      // Rely on storage.createPerson to manage IDs.
 
       for (let i = 0; i < count; i++) {
-        const dummyName = `Dummy Person ${nextId}`;
+        // storage.createPerson will generate and increment its internal ID
         const preferences = generateRandomPreferences();
         const allowRoommates = preferences.maxRoommates !== 0; // Derive from maxRoommates
 
-        const newPerson = {
-          id: nextId.toString(),
-          name: dummyName,
+        const newPerson = await storage.createPerson({ // Let storage generate the ID
+          name: `Dummy Person ${storage.getNextPersonId()}`, // Use getNextPersonId for name, it will be incremented by createPerson
           preferences: preferences,
           allowRoommates: allowRoommates,
           assignedRoom: undefined,
           requiredPayment: undefined,
-        };
+        });
         
-        currentPeople.push(newPerson);
-        currentPeopleCleartext.push(newPerson); // Add to cleartext list too
-        nextId++;
+        // Add the newly created person (with its generated ID) to the cleartext list
+        currentPeopleCleartext.push({
+          id: newPerson.id,
+          name: newPerson.name,
+          allowRoommates: newPerson.allowRoommates,
+          assignedRoom: newPerson.assignedRoom,
+          requiredPayment: newPerson.requiredPayment,
+          preferences: newPerson.preferences,
+        });
       }
-      storage.setNextPersonId(nextId); // Update the next ID in storage
+      // No need to call storage.setNextPersonId here, createPerson handles it.
 
-      await csvHandler.savePeople(currentPeople);
+      // Save the updated lists back to CSVs
+      await csvHandler.savePeople(await storage.getPeople()); // Get the latest from storage after additions
       await csvHandler.savePeopleCleartext(currentPeopleCleartext);
 
       res.json({ message: `Successfully added ${count} dummy people.` });
