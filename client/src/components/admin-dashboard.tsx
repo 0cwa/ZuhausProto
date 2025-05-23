@@ -21,6 +21,7 @@ import {
 export function AdminDashboard() {
   const [lastUpdate] = useState(new Date().toLocaleString());
   const { toast } = useToast();
+  const [pythonOutput, setPythonOutput] = useState<string | null>(null);
 
   const { data: peopleStatus, isLoading: isLoadingPeople } = useQuery({
     queryKey: ["/api/admin/people-status"],
@@ -35,19 +36,22 @@ export function AdminDashboard() {
   });
 
   const runMatchingMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/run-matching"),
+    mutationFn: () => apiRequest("POST", "/api/admin/run-python-matching"),
     onSuccess: (response) => {
       const data = response as any;
+      setPythonOutput(data.output);
       toast({
-        title: "Matching Completed",
-        description: `Successfully matched ${data.assignedCount} people to apartments`,
+        title: "Python Script Executed",
+        description: "Matching script ran successfully. Check output below.",
       });
+      // Invalidate matching results to show the new data from the Python script's CSV output
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
     },
-    onError: () => {
+    onError: (error) => {
+      setPythonOutput(`Error: ${error.message}`);
       toast({
-        title: "Error",
-        description: "Failed to run matching algorithm",
+        title: "Error Running Script",
+        description: error.message || "Failed to run Python matching script",
         variant: "destructive",
       });
     },
@@ -217,6 +221,23 @@ export function AdminDashboard() {
             )}
           </Button>
         </div>
+
+        {/* Python Script Output */}
+        {pythonOutput && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Play className="h-5 w-5 text-blue-600" />
+                Python Script Output
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <pre className="bg-gray-800 text-white p-4 rounded-md text-sm overflow-auto max-h-96">
+                {pythonOutput}
+              </pre>
+            </CardContent>
+          </Card>
+        )}
 
         {/* People Status Table */}
         <Card className="mb-8">
