@@ -12,6 +12,8 @@ export interface IStorage {
   getPersonByName(name: string): Promise<Person | undefined>;
   createPerson(person: Omit<Person, 'id'>): Promise<Person>;
   updatePerson(id: string, person: Partial<Person>): Promise<Person>;
+  getNextPersonId(): number; // Added for dummy person generation
+  setNextPersonId(id: number): void; // Added for dummy person generation
   
   // Matching operations
   saveMatchingResults(results: MatchingResult[]): Promise<void>;
@@ -80,6 +82,14 @@ export class MemStorage implements IStorage {
     const updated = { ...existing, ...person };
     this.people.set(id, updated);
     return updated;
+  }
+
+  getNextPersonId(): number {
+    return this.currentPersonId;
+  }
+
+  setNextPersonId(id: number): void {
+    this.currentPersonId = id;
   }
 
   // Matching operations

@@ -8,6 +8,7 @@ import { formSubmissionSchema, adminAuthSchema, PersonCleartext, MatchingResult 
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises'; // Import fs.promises for file operations
+import { generateRandomPreferences } from "./utils"; // Import the new utility
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -239,6 +240,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error in /api/admin/people-status:", error);
       res.status(500).json({ message: "Failed to get people status" });
+    }
+  });
+
+  // New endpoint to add dummy people
+  app.post("/api/admin/add-dummy-people", async (req, res) => {
+    try {
+      const { count } = req.body;
+      if (typeof count !== 'number' || count <= 0) {
+        return res.status(400).json({ message: "Invalid count provided." });
+      }
+
+      const currentPeople = await storage.getPeople();
+      const currentPeopleCleartext = await csvHandler.loadPeopleCleartext();
+      let nextId = storage.getNextPersonId(); // Get the next available ID from storage
+
+      for (let i = 0; i < count; i++) {
+        const dummyName = `Dummy Person ${nextId}`;
+        const preferences = generateRandomPreferences();
+        const allowRoommates = preferences.maxRoommates !== 0; // Derive from maxRoommates
+
+        const newPerson = {
+          id: nextId.toString(),
+          name: dummyName,
+          preferences: preferences,
+          allowRoommates: allowRoommates,
+          assignedRoom: undefined,
+          requiredPayment: undefined,
+        };
+        
+        currentPeople.push(newPerson);
+        currentPeopleCleartext.push(newPerson); // Add to cleartext list too
+        nextId++;
+      }
+      storage.setNextPersonId(nextId); // Update the next ID in storage
+
+      await csvHandler.savePeople(currentPeople);
+      await csvHandler.savePeopleCleartext(currentPeopleCleartext);
+
+      res.json({ message: `Successfully added ${count} dummy people.` });
+    } catch (error) {
+      console.error("Error adding dummy people:", error);
+      res.status(500).json({ message: "Failed to add dummy people." });
     }
   });
 

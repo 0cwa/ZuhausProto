@@ -15,14 +15,16 @@ import {
   Play, 
   Save, 
   RefreshCw,
-  Loader2 
+  Loader2,
+  PlusCircle
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 export function AdminDashboard() {
   const [lastUpdate] = useState(new Date().toLocaleString());
   const { toast } = useToast();
-  // Removed pythonOutput state as output will now be directly in the table
-  // const [pythonOutput, setPythonOutput] = useState<string | null>(null);
+  const [numDummyPeople, setNumDummyPeople] = useState(1); // State for dummy people input
 
   const { data: peopleStatus, isLoading: isLoadingPeople } = useQuery({
     queryKey: ["/api/admin/people-status"],
@@ -40,17 +42,14 @@ export function AdminDashboard() {
     mutationFn: () => apiRequest("POST", "/api/admin/run-matching"), // Call the TS matching endpoint
     onSuccess: (response) => {
       const data = response as any;
-      // No pythonOutput to set, directly invalidate queries
       toast({
         title: "Matching Completed",
         description: `Matching algorithm ran successfully. Assigned ${data.assignedCount} people.`,
       });
-      // Invalidate matching results to show the new data from the TS script's CSV output
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] }); // People status might change if assigned
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] });
     },
     onError: (error) => {
-      // setPythonOutput(`Error: ${error.message}`); // No pythonOutput
       toast({
         title: "Error Running Matching",
         description: error.message || "Failed to run matching algorithm",
@@ -69,7 +68,7 @@ export function AdminDashboard() {
       });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] });
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/apartments"] }); // Invalidate apartments to get updated tenant counts
+      queryClient.invalidateQueries({ queryKey: ["/api/apartments"] });
     },
     onError: () => {
       toast({
@@ -80,10 +79,29 @@ export function AdminDashboard() {
     },
   });
 
+  const addDummyPeopleMutation = useMutation({
+    mutationFn: (count: number) => apiRequest("POST", "/api/admin/add-dummy-people", { count }),
+    onSuccess: (response) => {
+      const data = response as any;
+      toast({
+        title: "Dummy People Added",
+        description: data.message,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] }); // Refresh people list
+    },
+    onError: (error) => {
+      toast({
+        title: "Error Adding Dummy People",
+        description: error.message || "Failed to add dummy people",
+        variant: "destructive",
+      });
+    },
+  });
+
   const refreshData = () => {
     queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] });
     queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/apartments"] }); // Refresh apartment data as well
+    queryClient.invalidateQueries({ queryKey: ["/api/apartments"] });
     toast({
       title: "Data Refreshed",
       description: "All data has been refreshed from the server",
@@ -222,24 +240,35 @@ export function AdminDashboard() {
               </>
             )}
           </Button>
-        </div>
 
-        {/* Python Script Output - REMOVED */}
-        {/* {pythonOutput && (
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Play className="h-5 w-5 text-blue-600" />
-                Python Script Output
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <pre className="bg-gray-800 text-white p-4 rounded-md text-sm overflow-auto max-h-96">
-                {pythonOutput}
-              </pre>
-            </CardContent>
-          </Card>
-        )} */}
+          {/* Add Dummy People Section */}
+          <div className="flex items-center gap-2 ml-auto p-2 border rounded-md bg-white shadow-sm">
+            <Label htmlFor="num-dummy-people" className="sr-only">Number of Dummy People</Label>
+            <Input
+              id="num-dummy-people"
+              type="number"
+              value={numDummyPeople}
+              onChange={(e) => setNumDummyPeople(parseInt(e.target.value) || 0)}
+              min={1}
+              max={100}
+              className="w-24 h-9 text-center"
+              disabled={addDummyPeopleMutation.isPending}
+            />
+            <Button
+              onClick={() => addDummyPeopleMutation.mutate(numDummyPeople)}
+              disabled={addDummyPeopleMutation.isPending || numDummyPeople <= 0}
+              size="sm"
+              className="bg-blue-500 hover:bg-blue-600"
+            >
+              {addDummyPeopleMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PlusCircle className="h-4 w-4" />
+              )}
+              <span className="ml-2 hidden sm:inline">Add Dummy People</span>
+            </Button>
+          </div>
+        </div>
 
         {/* People Status Table */}
         <Card className="mb-8">
