@@ -1,0 +1,3 @@
+ApartmentName,PersonID,PersonName,ExpectedPayment,AdjustedBid,GroupWinningBid,SecondHighestBidForApt,GroupMembersInWinningBid
+CozyCrest,2,test,1000.0,1000,1000.0,1000.0,test
+EnchantedNatura,3,Shmo,0.0,1000,1000.0,0.0,Shmo

@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 import numpy as np
+import os
 from collections import defaultdict
 
 # --- Configuration ---
@@ -9,7 +10,7 @@ APARTMENT_DATA_FILE = 'apartment_data.csv'
 OUTPUT_FILE = 'bidding_assignments.csv'
 
 # Social preference keys and their normalization factor (max value for 0-1 scaling)
-SOCIAL_PREF_KEYS_ soziale_NORM = {
+SOCIAL_PREF_KEY_NORMS = {
     "cleanliness": 100.0,
     "quietness": 100.0,
     "guests": 100.0,
@@ -46,7 +47,7 @@ class Person:
         prefs['sleepTime_mid'] = (sleep_time_range[0] + sleep_time_range[1]) / 2.0
         prefs['wakeTime_mid'] = (wake_time_range[0] + wake_time_range[1]) / 2.0
 
-        for key, norm_factor in SOCIAL_PREF_KEYS_ soziale_NORM.items():
+        for key, norm_factor in SOCIAL_PREF_KEY_NORMS.items():
             value = prefs.get(key, 0) # Default to 0 if missing
             vector.append(float(value) / norm_factor if norm_factor != 0 else float(value))
         return np.array(vector)
