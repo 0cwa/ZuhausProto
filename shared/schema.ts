@@ -51,7 +51,7 @@ export const personPreferencesSchema = z.object({
 export const personSchema = z.object({
   id: z.string(),
   name: z.string(),
-  encryptedData: z.string(), // This will now be a JSON string containing iv, encryptedData, encryptedAesKey
+  encryptedData: z.string(), // This will now be a JSON string containing iv, encryptedData, ephemeralPublicKey
   allowRoommates: z.boolean(),
   assignedRoom: z.string().optional(),
   requiredPayment: z.number().optional(),

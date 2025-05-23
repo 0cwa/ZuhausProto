@@ -1,8 +1,8 @@
 // Client-side encryption utilities using Web Crypto API
 
-const RSA_ALGORITHM = {
-  name: "RSA-OAEP",
-  hash: "SHA-256",
+const EC_ALGORITHM = {
+  name: "ECDH",
+  namedCurve: "P-256", // Corresponds to prime256v1 in Node.js
 };
 
 const AES_ALGORITHM = {
@@ -12,12 +12,12 @@ const AES_ALGORITHM = {
 
 const IV_LENGTH = 12; // 96-bit IV for AES-GCM
 
-export async function encryptData(data: string, publicKeyPEM: string): Promise<string> {
+export async function encryptData(data: string, serverPublicKeyPEM: string): Promise<string> {
   try {
-    // 1. Import the RSA public key
+    // 1. Import the server's EC public key
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
     const pemFooter = "-----END PUBLIC KEY-----";
-    const pemContents = publicKeyPEM.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
+    const pemContents = serverPublicKeyPEM.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
     const binaryDerString = atob(pemContents);
     const binaryDer = new Uint8Array(binaryDerString.length);
     
@@ -25,22 +25,42 @@ export async function encryptData(data: string, publicKeyPEM: string): Promise<s
       binaryDer[i] = binaryDerString.charCodeAt(i);
     }
 
-    const publicKey = await crypto.subtle.importKey(
+    const serverPublicKey = await crypto.subtle.importKey(
       "spki",
       binaryDer.buffer,
-      RSA_ALGORITHM,
+      EC_ALGORITHM,
+      false,
+      [] // Public key is for key derivation, not direct encryption
+    );
+
+    // 2. Generate an ephemeral EC key pair on the client
+    const ephemeralKeyPair = await crypto.subtle.generateKey(
+      EC_ALGORITHM,
+      true, // extractable
+      ["deriveBits"]
+    );
+
+    // 3. Derive a shared secret using client's ephemeral private key and server's public key
+    const sharedSecret = await crypto.subtle.deriveBits(
+      {
+        name: EC_ALGORITHM.name,
+        public: serverPublicKey,
+      },
+      ephemeralKeyPair.privateKey,
+      256 // 256 bits for AES-256 key
+    );
+
+    // 4. Derive AES key from shared secret (using a simple hash for consistency with server)
+    // In a real application, use HKDF for key derivation.
+    const aesKey = await crypto.subtle.importKey(
+      "raw",
+      sharedSecret,
+      AES_ALGORITHM,
       false,
       ["encrypt"]
     );
 
-    // 2. Generate a symmetric AES key
-    const aesKey = await crypto.subtle.generateKey(
-      AES_ALGORITHM,
-      true, // extractable
-      ["encrypt", "decrypt"]
-    );
-
-    // 3. Encrypt the data with the AES key
+    // 5. Encrypt the data with the AES key
     const encodedData = new TextEncoder().encode(data);
     const iv = crypto.getRandomValues(new Uint8Array(IV_LENGTH)); // Generate a random IV
     
@@ -53,19 +73,14 @@ export async function encryptData(data: string, publicKeyPEM: string): Promise<s
       encodedData
     );
 
-    // 4. Export the AES key and encrypt it with the RSA public key
-    const exportedAesKey = await crypto.subtle.exportKey("raw", aesKey);
-    const encryptedAesKeyBuffer = await crypto.subtle.encrypt(
-      RSA_ALGORITHM,
-      publicKey,
-      exportedAesKey
-    );
+    // 6. Export the client's ephemeral public key
+    const exportedEphemeralPublicKey = await crypto.subtle.exportKey("raw", ephemeralKeyPair.publicKey);
 
-    // 5. Combine IV, encrypted data, and encrypted AES key into a single string
+    // 7. Combine IV, encrypted data, and ephemeral public key into a single object
     const fullEncryptedData = {
       iv: Array.from(iv), // Convert Uint8Array to array for JSON serialization
       encryptedData: Array.from(new Uint8Array(encryptedDataBuffer)),
-      encryptedAesKey: Array.from(new Uint8Array(encryptedAesKeyBuffer)),
+      ephemeralPublicKey: Array.from(new Uint8Array(exportedEphemeralPublicKey)),
     };
     
     // Stringify and base64 encode the combined object

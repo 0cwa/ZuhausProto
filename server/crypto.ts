@@ -2,29 +2,44 @@ import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 
-const RSA_ALGORITHM_DETAILS = {
-  name: 'rsa-oaep',
-  modulusLength: 2048,
+const EC_ALGORITHM_DETAILS = {
+  name: 'prime256v1', // A common and secure elliptic curve
   publicKeyEncoding: { type: 'spki', format: 'pem' } as const,
   privateKeyEncoding: { type: 'pkcs8', format: 'pem' } as const,
-  oaepHash: 'sha256',
 };
 
 const AES_ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV for AES-GCM
+const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag for AES-GCM
 
 const KEYS_DIR = path.resolve(process.cwd(), 'keys');
 const PRIVATE_KEY_PATH = path.join(KEYS_DIR, '.private_key.pem');
 const PUBLIC_KEY_PATH = path.join(KEYS_DIR, '.public_key.pem'); // Optional, but good practice
 
-export class RSAKeyPair {
+export class ECKeyPair { // Renamed from RSAKeyPair
   private privateKey: crypto.KeyObject;
   public publicKey: crypto.KeyObject;
 
   constructor() {
-    // Initialize with dummy keys, actual keys will be loaded/generated async
-    this.privateKey = crypto.createPrivateKey('-----BEGIN RSA PRIVATE KEY-----\nMC4CAQAwBQYDK2VuBCIEIEY+2020202020202020202020202020202020202020\n-----END RSA PRIVATE KEY-----');
-    this.publicKey = crypto.createPublicKey('-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAJ+2020202020202020202020202020202020202020\n-----END PUBLIC KEY-----');
+    // Initialize with dummy keys. These are *not* valid EC keys, but
+    // they prevent a crash if init() hasn't run yet. They will be
+    // immediately overwritten by init().
+    // Using a minimal valid PEM for a generic private/public key to avoid parsing errors.
+    this.privateKey = crypto.createPrivateKey({
+      key: '-----BEGIN PRIVATE KEY-----\n' +
+           'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg+2020202020202020202020202020202020202020\n' +
+           'oihmQyBggqhkjOPAgEBAQRqGmswawIBAQQg+2020202020202020202020202020202020202020\n' +
+           '-----END PRIVATE KEY-----',
+      format: 'pem',
+      type: 'pkcs8'
+    });
+    this.publicKey = crypto.createPublicKey({
+      key: '-----BEGIN PUBLIC KEY-----\n' +
+           'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+2020202020202020202020202020202020202020\n' +
+           '-----END PUBLIC KEY-----',
+      format: 'pem',
+      type: 'spki'
+    });
   }
 
   async init(): Promise<void> {
@@ -37,23 +52,23 @@ export class RSAKeyPair {
       
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
-      console.log('RSA key pair loaded from files.');
+      console.log('EC key pair loaded from files.');
     } catch (error) {
       // If files don't exist or are unreadable, generate new keys
-      console.warn('RSA key pair files not found or unreadable. Generating new keys...');
-      const keyPair = crypto.generateKeyPairSync('rsa', {
-        modulusLength: RSA_ALGORITHM_DETAILS.modulusLength,
-        publicKeyEncoding: RSA_ALGORITHM_DETAILS.publicKeyEncoding,
-        privateKeyEncoding: RSA_ALGORITHM_DETAILS.privateKeyEncoding,
+      console.warn('EC key pair files not found or unreadable. Generating new keys...');
+      const keyPair = crypto.generateKeyPairSync('ec', {
+        namedCurve: EC_ALGORITHM_DETAILS.name,
+        publicKeyEncoding: EC_ALGORITHM_DETAILS.publicKeyEncoding,
+        privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
       this.privateKey = keyPair.privateKey;
       this.publicKey = keyPair.publicKey;
 
       // Save new keys to files
-      await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(RSA_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
-      await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(RSA_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
-      console.log('New RSA key pair generated and saved to files.');
+      await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
+      await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
+      console.log('New EC key pair generated and saved to files.');
     }
   }
 
@@ -69,35 +84,34 @@ export class RSAKeyPair {
     return this.publicKey.export({ type: 'spki', format: 'pem' }) as string;
   }
 
-  decrypt(encryptedPayload: string): string {
+  async decrypt(encryptedPayload: string): Promise<string> {
     try {
       // Decode the base64 string to get the JSON string
       const decodedPayload = Buffer.from(encryptedPayload, 'base64').toString('utf8');
-      const { iv, encryptedData, encryptedAesKey } = JSON.parse(decodedPayload);
+      const { iv, encryptedData, ephemeralPublicKey } = JSON.parse(decodedPayload);
 
       // Convert arrays back to Buffers/Uint8Arrays
       const ivBuffer = Buffer.from(iv);
       const encryptedDataBuffer = Buffer.from(encryptedData);
-      const encryptedAesKeyBuffer = Buffer.from(encryptedAesKey);
+      const ephemeralPublicKeyBuffer = Buffer.from(ephemeralPublicKey);
 
-      // 1. Decrypt the AES key using RSA private key
-      const decryptedAesKey = crypto.privateDecrypt(
-        {
-          key: this.privateKey,
-          padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-          oaepHash: RSA_ALGORITHM_DETAILS.oaepHash,
-        },
-        encryptedAesKeyBuffer
-      );
+      // 1. Create ECDH instance with server's private key
+      const ecdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
+      ecdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' })); // Use DER format for setPrivateKey
 
-      // 2. Decrypt the actual data using the decrypted AES key and IV
-      const decipher = crypto.createDecipheriv(AES_ALGORITHM, decryptedAesKey, ivBuffer);
+      // 2. Derive shared secret using client's ephemeral public key
+      const sharedSecret = ecdh.computeSecret(ephemeralPublicKeyBuffer);
+
+      // 3. Derive AES key from shared secret (e.g., using HKDF or a simple hash)
+      // For simplicity, we'll use a direct hash of the shared secret.
+      // In a real application, use HKDF for key derivation.
+      const aesKey = crypto.createHash('sha256').update(sharedSecret).digest();
+
+      // 4. Decrypt the actual data using the derived AES key and IV
+      const decipher = crypto.createDecipheriv(AES_ALGORITHM, aesKey, ivBuffer);
       
-      // The auth tag is appended to the end of the encrypted data in AES-GCM
-      // It's typically 16 bytes (128 bits)
-      const authTagLength = 16; 
-      const ciphertext = encryptedDataBuffer.slice(0, encryptedDataBuffer.length - authTagLength);
-      const authTag = encryptedDataBuffer.slice(encryptedDataBuffer.length - authTagLength);
+      const ciphertext = encryptedDataBuffer.slice(0, encryptedDataBuffer.length - AUTH_TAG_LENGTH);
+      const authTag = encryptedDataBuffer.slice(encryptedDataBuffer.length - AUTH_TAG_LENGTH);
       
       decipher.setAuthTag(authTag);
 
@@ -119,6 +133,6 @@ export class RSAKeyPair {
 }
 
 // Global instance
-export const serverKeyPair = new RSAKeyPair();
+export const serverKeyPair = new ECKeyPair();
 // Initialize the key pair asynchronously when the server starts
 // This will be called in server/routes.ts
