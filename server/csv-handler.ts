@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { parse } from 'csv-parse'; // Import the csv-parse library
+import { parse } from 'csv-parse/sync'; // Import the synchronous parse function
 import { Apartment, Person, PersonCleartext, PersonPreferences } from '@shared/schema';
 import { fileURLToPath } from 'url'; // Import fileURLToPath
 
@@ -34,7 +34,8 @@ export class CSVHandler {
 
     let records: string[][] | undefined;
     try {
-      records = await parse(content, {
+      // Use the synchronous parse function
+      records = parse(content, {
         columns: false, // Do not assume first row is headers
         skip_empty_lines: true,
         trim: true, // Trim whitespace from each cell
