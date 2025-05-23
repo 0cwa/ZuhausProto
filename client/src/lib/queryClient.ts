@@ -2,34 +2,8 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
-    let errorMessage = res.statusText;
-    try {
-      // Attempt to parse the response body as JSON
-      const errorBody = await res.json();
-      // If it has a 'message' property, use that as the error message
-      if (errorBody && typeof errorBody.message === 'string') {
-        errorMessage = errorBody.message;
-      } else {
-        // Fallback if no 'message' property or not JSON
-        const text = await res.text(); // Re-read as text if JSON parsing failed or no message
-        errorMessage = text || res.statusText;
-         // Prepend status if not already part of a parsed message
-        if (!errorBody?.message) {
-            errorMessage = `${res.status}: ${errorMessage}`;
-        }
-      }
-    } catch (e) {
-      // If JSON parsing fails, try to get text content
-      try {
-        const text = await res.text();
-        errorMessage = text || res.statusText;
-        errorMessage = `${res.status}: ${errorMessage}`;
-      } catch (textError) {
-        // Fallback to just status text if all else fails
-        errorMessage = `${res.status}: ${res.statusText}`;
-      }
-    }
-    throw new Error(errorMessage);
+    const text = (await res.text()) || res.statusText;
+    throw new Error(`${res.status}: ${text}`);
   }
 }
 
@@ -64,10 +38,6 @@ export const getQueryFn: <T>(options: {
     }
 
     await throwIfResNotOk(res);
-    // It's important to clone the response here if throwIfResNotOk might consume it
-    // and we need to consume it again for res.json().
-    // However, our current throwIfResNotOk tries to parse, so we should be fine.
-    // If issues arise, clone: const resClone = res.clone(); await throwIfResNotOk(res); return await resClone.json();
     return await res.json();
   };
 
