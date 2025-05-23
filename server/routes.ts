@@ -394,10 +394,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/admin/matching-results", async (req, res) => {
     try {
       const results = await storage.getMatchingResults();
-      // FIX: Await storage.getApartments() before calling find
+      // Await storage.getApartments() here to get the actual array
       const apartments = await storage.getApartments(); 
 
       const resultsWithApartmentDetails = results.map(result => {
+        // Now 'apartments' is guaranteed to be an array
         const apartment = apartments.find(apt => apt.id === result.apartmentId);
         return {
           ...result,
