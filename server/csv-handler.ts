@@ -160,11 +160,11 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     try {
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
-      console.log(`[CSVHandler] Read content from ${PEOPLE_CLEARTEXT_CSV}: ${content.substring(0, 200)}...`);
+      console.log(`[CSVHandler] Read content from ${PEOPLE_CLEARTEXT_CSV}: ${content.substring(0, 300)}...`); // Log more content
       const rows = await this.parseCSV(content);
       console.log(`[CSVHandler] Parsed ${rows.length} rows from peoplec.csv`);
 
-      if (rows.length < 1) { // Check if there are any rows at all
+      if (rows.length < 1) { 
           console.warn(`[CSVHandler] peoplec.csv is empty or contains no processable rows. Returning empty array.`);
           return [];
       }
@@ -198,8 +198,9 @@ export class CSVHandler {
           }
           
           let preferencesString = row[preferencesColIdx] || '{}';
-          // console.log(`[CSVHandler] Row ${rowIndex} raw preferences string before JSON.parse: '${preferencesString}'`);
-
+          // Log the exact string being passed to JSON.parse
+          console.log(`[CSVHandler] Row ${rowIndex} (ID: ${row[idColIdx]}) raw preferences string before JSON.parse: '${preferencesString}'`);
+          
           const preferences: PersonPreferences = JSON.parse(preferencesString);
           
           const personData: PersonCleartext = {
