@@ -61,7 +61,7 @@ export class CSVHandler {
         name: row[0] || `Apartment ${index + 1}`,
         sqMeters: parseFloat(row[1]) || 50,
         numWindows: parseInt(row[2]) || 2,
-        windowDirections: row[3] ? row[3].split(';').map(d => d.trim()).filter(d => d) : ['N'],
+        windowDirections: row[3] ? row[3].split(',').map(d => d.trim()).filter(d => d) : [], // Changed to split by comma
         totalWindowSize: parseFloat(row[4]) || 10,
         // row[5] is Floor Level, currently not in schema
         numBedrooms: parseInt(row[6]) || 1, // Corrected index
@@ -73,8 +73,10 @@ export class CSVHandler {
         allowRoommates: row[12]?.toLowerCase() !== 'false', // Corrected index
       }));
     } catch (error) {
-      console.error('Error loading apartments, returning sample data:', error);
-      return this.createSampleApartments();
+      console.error('Error loading apartments, returning empty array:', error);
+      // If the file doesn't exist or is unreadable, return an empty array.
+      // The sample data generation is removed as the CSV is the source of truth.
+      return [];
     }
   }
 
@@ -92,7 +94,7 @@ export class CSVHandler {
       apt.name,
       apt.sqMeters.toString(),
       apt.numWindows.toString(),
-      apt.windowDirections.join(';'),
+      apt.windowDirections.join(','), // Changed to join by comma
       apt.totalWindowSize.toString(),
       (apt as any).floorLevel || "1", // Placeholder for FloorLevel if not in schema
       apt.numBedrooms.toString(),
@@ -117,12 +119,12 @@ export class CSVHandler {
       const [headers, ...dataRows] = rows;
       
       return dataRows.map((row, index) => ({
-        id: (index + 1).toString(),
-        name: row[0] || '',
-        encryptedData: row[1] || '',
-        allowRoommates: row[2]?.toLowerCase() === 'true',
-        assignedRoom: row[3] || undefined,
-        requiredPayment: row[4] ? parseFloat(row[4]) : undefined,
+        id: row[0] || (index + 1).toString(), // Use existing ID or generate new
+        name: row[1] || '', // Corrected index for name
+        encryptedData: row[2] || '', // Corrected index for encryptedData
+        allowRoommates: row[3]?.toLowerCase() === 'true', // Corrected index for allowRoommates
+        assignedRoom: row[4] || undefined, // Corrected index for assignedRoom
+        requiredPayment: row[5] ? parseFloat(row[5]) : undefined, // Corrected index for requiredPayment
       }));
     } catch (error) {
       // Return empty array if file doesn't exist
@@ -133,9 +135,10 @@ export class CSVHandler {
   async savePeople(people: Person[]): Promise<void> {
     await this.ensureDataDirectory();
     
-    const headers = ['Name', 'EncryptedData', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment'];
+    const headers = ['ID', 'Name', 'EncryptedData', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment']; // Added ID to headers
     
     const rows = people.map(person => [
+      person.id, // Include ID when saving
       person.name,
       person.encryptedData,
       person.allowRoommates.toString(),
@@ -145,45 +148,6 @@ export class CSVHandler {
     
     const csvContent = await this.stringifyCSV([headers, ...rows]);
     await fs.writeFile(PEOPLE_CSV, csvContent, 'utf8');
-  }
-
-  private createSampleApartments(): Apartment[] {
-    // This sample data generation should also reflect the 13-column structure if it's to be saved and reloaded.
-    // For simplicity, I'm keeping the Apartment type as defined in schema.ts.
-    // If FloorLevel becomes part of the schema, this should be updated.
-    const apartments: Apartment[] = [];
-    const names = [
-      'Sunset View Studio', 'Garden Terrace 1B', 'City Heights 2B', 'Riverside Loft',
-      'Mountain View 3B', 'Downtown Studio', 'Park Side 2B', 'Harbor View 1B',
-      'Skyline Penthouse', 'Forest Glen 2B', 'Ocean Breeze 1B', 'Valley View 3B'
-    ];
-    
-    const directions = ['N', 'S', 'E', 'W', 'NE', 'NW', 'SE', 'SW'];
-    
-    for (let i = 0; i < 50; i++) {
-      const name = names[i % names.length] + (i >= names.length ? ` ${Math.floor(i / names.length) + 1}` : '');
-      const numBedrooms = Math.floor(Math.random() * 4) + 1;
-      const numWindows = Math.floor(Math.random() * 6) + 2;
-      const selectedDirections = directions.slice(0, Math.floor(Math.random() * 4) + 1);
-      
-      apartments.push({
-        id: (i + 1).toString(),
-        name,
-        sqMeters: Math.floor(Math.random() * 100) + 30,
-        numWindows,
-        windowDirections: selectedDirections,
-        totalWindowSize: Math.floor(Math.random() * 15) + 5,
-        numBedrooms,
-        numBathrooms: (Math.floor(Math.random() * 2) + 1) + (Math.random() > 0.5 ? 0.5 : 0), // Sample with .5
-        hasDishwasher: Math.random() > 0.4,
-        hasWasher: Math.random() > 0.3,
-        hasDryer: Math.random() > 0.5,
-        tenants: 0,
-        allowRoommates: true,
-      });
-    }
-    
-    return apartments;
   }
 }
 

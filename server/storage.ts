@@ -23,13 +23,13 @@ export class MemStorage implements IStorage {
   private apartments: Map<string, Apartment>;
   private people: Map<string, Person>;
   private matchingResults: MatchingResult[];
-  private currentId: number;
+  private currentPersonId: number; // Renamed for clarity
 
   constructor() {
     this.apartments = new Map();
     this.people = new Map();
     this.matchingResults = [];
-    this.currentId = 1;
+    this.currentPersonId = 1; // Initialize to 1
   }
 
   // Apartment operations
@@ -65,8 +65,8 @@ export class MemStorage implements IStorage {
   }
 
   async createPerson(person: Omit<Person, 'id'>): Promise<Person> {
-    const id = this.currentId.toString();
-    this.currentId++;
+    const id = this.currentPersonId.toString();
+    this.currentPersonId++;
     const newPerson: Person = { ...person, id };
     this.people.set(id, newPerson);
     return newPerson;
@@ -105,9 +105,15 @@ export class MemStorage implements IStorage {
 
   setPeople(people: Person[]): void {
     this.people.clear();
+    let maxId = 0;
     people.forEach(person => {
       this.people.set(person.id, person);
+      const idNum = parseInt(person.id);
+      if (!isNaN(idNum) && idNum > maxId) {
+        maxId = idNum;
+      }
     });
+    this.currentPersonId = maxId + 1; // Set next ID to be greater than any existing
   }
 }
 
