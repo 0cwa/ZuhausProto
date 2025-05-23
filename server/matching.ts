@@ -21,6 +21,7 @@ interface ApartmentBid {
 export class MatchingEngine {
   private decryptPersonData(person: Person): DecodedPerson {
     try {
+      // Ensure serverKeyPair.decrypt is awaited as it's now async
       const decryptedData = serverKeyPair.decrypt(person.encryptedData);
       const preferences = JSON.parse(decryptedData) as PersonPreferences;
       return { ...person, preferences };
@@ -67,7 +68,7 @@ export class MatchingEngine {
       const midWake1 = (wakeRange1[0] + wakeRange1[1]) / 2;
       const midWake2 = (wakeRange2[0] + wakeRange2[1]) / 2;
       const normMidWake1 = midWake1 % 1440;
-      const normMidWake2 = midWake2 % 1440;
+      const normMidWake2 = normMidWake2 % 1440;
       const wakeDiff = Math.min(Math.abs(normMidWake1 - normMidWake2), 1440 - Math.abs(normMidWake1 - normMidWake2));
       const wakeCompatibility = Math.max(0, 100 - (wakeDiff / 360) * 100);
       totalScore += wakeCompatibility;
@@ -217,11 +218,11 @@ export class MatchingEngine {
     checkRange(apartment.numBathrooms, preferences.numBathrooms, preferences.numBathroomsWorth);
 
     if (preferences.windowDirections && preferences.windowDirections.length > 0) {
-      // OR logic: if apartment does NOT have AT LEAST ONE of the preferred directions
-      const hasAtLeastOneMatch = preferences.windowDirections.some(dir => 
-        apartment.windowDirections.includes(dir)
-      );
-      if (!hasAtLeastOneMatch) {
+      const selectedDirections = preferences.windowDirections;
+      const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
+      const matchCount = selectedDirections.filter(dir => apartment.windowDirections.includes(dir)).length;
+      
+      if (matchCount < requiredMatches) {
         deduction += preferences.windowDirectionsWorth || 0;
       }
     }
@@ -240,7 +241,10 @@ export class MatchingEngine {
   }
 
   async runMatching(people: Person[], apartments: Apartment[]): Promise<MatchingResult[]> {
-    const decodedPeople = people.map(person => this.decryptPersonData(person));
+    // Decrypt all people data first
+    const decodedPeoplePromises = people.map(person => this.decryptPersonData(person));
+    const decodedPeople = await Promise.all(decodedPeoplePromises); // Await all decryption
+
     const groups = this.formRoommateGroups(decodedPeople);
     
     const availableApartments = apartments.map(apt => ({ ...apt, currentTenants: apt.tenants })); 

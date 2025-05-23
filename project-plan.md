@@ -71,7 +71,7 @@ Phase 1: Public-Facing Form Page (/)
         [FE] Window Directions Checkboxes:
             [BE] Backend logic to get all unique directions from apartment_data.csv (e.g., "N", "S", "E", "W", "NE", etc. Values are semicolon-separated in the CSV).
             [FE] Generate checkboxes dynamically based on unique directions.
-            [FE] Implement "OR contains" logic for filtering preview counts. (If "N" or "E" are checked, count apartments with N or E or both).
+            [FE] Implement "at least 75% of selected directions must be present in the apartment's window directions" logic for filtering preview counts.
         [FE] Total Window Size Slider:
             [FE] Range slider.
             [BE] Backend logic for min/max from apartment_data.csv.
@@ -88,6 +88,9 @@ Phase 1: Public-Facing Form Page (/)
             [FE] Checkbox for "Includes Dishwasher".
             [FE] Checkbox for "Includes Washer".
             [FE] Checkbox for "Includes Dryer".
+        [FE] Characteristic Worth Inputs:
+            [FE] Next to each apartment characteristic field (Sq. Meters, Num Windows, Window Dirs, Total Window Size, Num Bedrooms, Num Bathrooms, Dishwasher, Washer, Dryer), add a number input for "Worth to me".
+            [FE] Display helper text: "This amount will be deducted from your bid price for each apartment that doesn't meet this characteristic."
         [FE] Roommate Section:
             [FE] Checkbox "Allow roommates" (default checked).
             [FE] Conditional display logic: If "Allow roommates" is checked, show:
@@ -102,9 +105,6 @@ Phase 1: Public-Facing Form Page (/)
                     [FE] "I wake up around:" (Range input 4am - 1pm, step e.g., 30 mins). Format time nicely.
         [FE] Bid Input:
             [FE] Number input for "How much would you bid for your optimal location?".
-        [FE] Characteristic Worth Inputs:
-            [FE] Next to each apartment characteristic field (Sq. Meters, Num Windows, Window Dirs, Total Window Size, Num Bedrooms, Num Bathrooms, Dishwasher, Washer, Dryer), add a number input for "Worth to me".
-            [FE] Display helper text: "This amount will be deducted from your bid price for each apartment that doesn't meet this characteristic."
 
     Form Submission:
         [BE] Create API endpoint for form submission (e.g., POST /api/submit-preferences).
@@ -150,7 +150,7 @@ Phase 2: Admin Panel (/adminsecret)
             [BE] Develop a scoring/compatibility algorithm for interpersonal factors (Cleanliness, Quiet, Guests, Alone Time, Sleep/Wake). Define thresholds for a "good match."
             [BE] Develop logic to form potential roommate groups:
                 Consider maximum group size (user's max_other_roommates + 1, up to 5 people total).
-                Ensure all members in a potential group have compatible apartment characteristic preferences (sq_meters, windows, bedrooms, bathrooms, amenities). This means finding common overlapping ranges or exact matches for checkboxes.
+                Ensure all members in a potential group have compatible apartment characteristic preferences (sq_meters, windows, bedrooms, bathrooms, amenities).
                 Ensure interpersonal factor compatibility within the group.
         [BE] Bidding & Auction Logic:
             [BE] Load apartment_data.csv (current state with Tenants).
@@ -176,8 +176,7 @@ Phase 2: Admin Panel (/adminsecret)
         [BE] Decryption (if needed again): Decrypt people.csv data.
         [BE] Update apartment_data.csv:
             [BE] For each assigned apartment, update Tenants with the number of assigned people.
-            [BE] For each assigned apartment, update Allow Roommates. Logic: if all people in the assigned group had "Allow Roommates" checked AND Tenants < Number of Bedrooms, set to True. Otherwise False. Simpler: if Tenants == Number of Bedrooms, set apartment Allow Roommates to False. Otherwise, if the group that was assigned collectively expressed willingness for more roommates (e.g., based on their initial preference), set to True. If individuals, it's based on their single preference. This is still a bit fuzzy from the prompt "updates if the people there allow roommates". A simple rule: if the apartment is now full based on Number of Bedrooms, Allow Roommates becomes False. If not full, and the assigned tenants as a whole indicated they are open to more (e.g. all of them selected Allow Roommates), set to True. Otherwise, it becomes False.
-            Revised Simpler Logic for apartment_data.csv -> Allow Roommates update: After assignment, if Tenants == Number of Bedrooms, then Allow Roommates for that apartment becomes False. If Tenants < Number of Bedrooms, and the original people.csv entries for the assigned individuals all had Allow Roommates = True, then the apartment's Allow Roommates remains True. Otherwise, it becomes False.
+            [BE] For each assigned apartment, update Allow Roommates. Logic: if all people in the assigned group had "Allow Roommates" checked AND Tenants < Number of Bedrooms, set to True. Otherwise False. Simpler: if Tenants == Number of Bedrooms, set apartment Allow Roommates to False. If Tenants < Number of Bedrooms, and the original people.csv entries for the assigned individuals all had Allow Roommates = True, then the apartment's Allow Roommates remains True. Otherwise, it becomes False.
         [BE] Update people.csv:
             [BE] For each assigned person, update their AssignedRoom column with the apartment name.
             [BE] For each assigned person, update their RequiredPayment column with their calculated payment amount.

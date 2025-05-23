@@ -61,10 +61,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.query.windowDirections) {
         const selectedDirections = (req.query.windowDirections as string).split(',');
         if (selectedDirections.length > 0) {
-            // OR logic: apartment matches if it has at least one of the selected directions
-            filteredApartments = filteredApartments.filter(apt => 
-              selectedDirections.some(dir => apt.windowDirections.includes(dir))
-            );
+            const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
+            filteredApartments = filteredApartments.filter(apt => {
+                const matchCount = selectedDirections.filter(dir => apt.windowDirections.includes(dir)).length;
+                return matchCount >= requiredMatches;
+            });
         }
       }
       
