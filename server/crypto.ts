@@ -43,15 +43,16 @@ export class ECKeyPair {
       privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
     });
 
-    privateKeyPem = keyPairGenerated.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
-    publicKeyPem = keyPairGenerated.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
+    // Use crypto.exportKey() directly on the KeyObject instances
+    privateKeyPem = crypto.exportKey(EC_ALGORITHM_DETAILS.privateKeyEncoding, keyPairGenerated.privateKey).toString();
+    publicKeyPem = crypto.exportKey(EC_ALGORITHM_DETAILS.publicKeyEncoding, keyPairGenerated.publicKey).toString();
 
     this.privateKey = keyPairGenerated.privateKey;
     this.publicKey = keyPairGenerated.publicKey;
 
     // This is the critical part: get raw private key bytes directly from the generated KeyObject
     // using the 'sec1' DER format, which is what ECDH.setPrivateKey expects.
-    rawPrivateKeyBuffer = this.privateKey.export({ format: 'der', type: 'sec1' }) as Buffer;
+    rawPrivateKeyBuffer = crypto.exportKey({ format: 'der', type: 'sec1' }, this.privateKey) as Buffer;
 
     // Save new PEM keys to files (still save them for future persistence)
     await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
@@ -66,7 +67,7 @@ export class ECKeyPair {
     if (!this.publicKey) {
       throw new Error('Public key not initialized. Call init() first.');
     }
-    const pem = this.publicKey.export({ type: 'spki', format: 'pem' }) as string;
+    const pem = crypto.exportKey({ type: 'spki', format: 'pem' }, this.publicKey) as string;
     const pemHeader = "-----BEGIN PUBLIC KEY-----";
     const pemFooter = "-----END PUBLIC KEY-----";
     const pemContents = pem.replace(pemHeader, "").replace(pemFooter, "").replace(/\s/g, "");
@@ -77,7 +78,7 @@ export class ECKeyPair {
     if (!this.publicKey) {
       throw new Error('Public key not initialized. Call init() first.');
     }
-    return this.publicKey.export({ type: 'spki', format: 'pem' }) as string;
+    return crypto.exportKey({ type: 'spki', format: 'pem' }, this.publicKey) as string;
   }
 
   async decrypt(encryptedPayload: string): Promise<string> {
