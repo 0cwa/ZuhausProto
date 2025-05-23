@@ -61,7 +61,8 @@ export class CSVHandler {
         name: row[0] || `Apartment ${index + 1}`,
         sqMeters: parseFloat(row[1]) || 50,
         numWindows: parseInt(row[2]) || 2,
-        windowDirections: row[3] ? row[3].split(',').map(d => d.trim()).filter(d => d) : [], // Ensure split by comma
+        // Ensure split by comma and trim each direction
+        windowDirections: row[3] ? row[3].split(',').map(d => d.trim()).filter(d => d) : [], 
         totalWindowSize: parseFloat(row[4]) || 10,
         // row[5] is Floor Level, currently not in schema
         numBedrooms: parseInt(row[6]) || 1, 

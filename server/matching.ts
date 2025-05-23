@@ -19,10 +19,10 @@ interface ApartmentBid {
 }
 
 export class MatchingEngine {
-  private decryptPersonData(person: Person): DecodedPerson {
+  private async decryptPersonData(person: Person): Promise<DecodedPerson> {
     try {
       // Ensure serverKeyPair.decrypt is awaited as it's now async
-      const decryptedData = serverKeyPair.decrypt(person.encryptedData);
+      const decryptedData = await serverKeyPair.decrypt(person.encryptedData);
       const preferences = JSON.parse(decryptedData) as PersonPreferences;
       return { ...person, preferences };
     } catch (error) {
@@ -220,6 +220,7 @@ export class MatchingEngine {
     if (preferences.windowDirections && preferences.windowDirections.length > 0) {
       const selectedDirections = preferences.windowDirections;
       const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
+      // Filter apartment's directions to see how many match the selected ones
       const matchCount = selectedDirections.filter(dir => apartment.windowDirections.includes(dir)).length;
       
       if (matchCount < requiredMatches) {

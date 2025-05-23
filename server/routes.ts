@@ -63,6 +63,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (selectedDirections.length > 0) {
             const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
             filteredApartments = filteredApartments.filter(apt => {
+                // Check if at least 75% of selectedDirections are present in apt.windowDirections
                 const matchCount = selectedDirections.filter(dir => apt.windowDirections.includes(dir)).length;
                 return matchCount >= requiredMatches;
             });
