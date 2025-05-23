@@ -1,5 +1,5 @@
-import { Apartment, Person, PersonPreferences, MatchingResult, PersonCleartext } from '@shared/schema'; // Import PersonCleartext
-import { serverKeyPair } from './crypto';
+import { Apartment, Person, PersonPreferences, MatchingResult, PersonCleartext } from '@shared/schema';
+// Removed serverKeyPair import as decryption is bypassed for debugging.
 
 // DecodedPerson will now directly contain preferences
 interface DecodedPerson extends PersonCleartext {}
@@ -19,10 +19,8 @@ interface ApartmentBid {
 
 export class MatchingEngine {
   // This method is now simplified as preferences are directly available
+  // It expects 'person.encryptedData' to actually contain the JSON string of preferences.
   private decryptPersonData(person: Person): DecodedPerson {
-    // In this debugging mode, 'person' is actually a PersonCleartext object
-    // that has been cast to Person for compatibility with existing types.
-    // We need to parse its 'encryptedData' field as preferences.
     try {
       const preferences = JSON.parse(person.encryptedData) as PersonPreferences;
       return { 

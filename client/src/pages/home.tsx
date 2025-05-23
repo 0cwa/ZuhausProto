@@ -10,12 +10,9 @@ import { Home as HomeIcon, Shield } from "lucide-react";
 export default function Home() {
   const [apartmentCount, setApartmentCount] = useState<number | null>(null);
 
-  const { data: serverData } = useQuery({
-    queryKey: ["/api/public-key"],
-  });
-
-  // Removed initialCount query as onApartmentCountChange will set it.
-  // If you need an initial count before form interaction, you can re-add it.
+  // Removed serverData query as public key is no longer used for encryption in this mode.
+  // Providing a dummy value for Identicon.
+  const serverData = { hash: "debugserver", publicKey: "dummy_public_key" };
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -36,7 +33,8 @@ export default function Home() {
             <div className="flex items-center space-x-4">
               <div className="text-sm text-slate-600">Server ID</div>
               <div className="w-10 h-10 rounded-lg overflow-hidden border-2 border-slate-200">
-                <Identicon value={serverData?.hash || "default"} size={40} />
+                {/* Identicon now uses a static debug hash */}
+                <Identicon value={serverData.hash} size={40} />
               </div>
             </div>
           </div>
@@ -60,18 +58,18 @@ export default function Home() {
           </CardContent>
         </Card>
 
-        {/* Security Notice */}
-        <Alert className="mb-8 border-blue-200 bg-blue-50">
+        {/* Security Notice - Removed as encryption is bypassed for debugging */}
+        {/* <Alert className="mb-8 border-blue-200 bg-blue-50">
           <Shield className="h-4 w-4 text-blue-600" />
           <AlertDescription className="text-blue-700">
             <strong>Data Security:</strong> Your preference data will be encrypted client-side before submission. 
             Only your name and roommate preference will be stored unencrypted.
           </AlertDescription>
-        </Alert>
+        </Alert> */}
 
         {/* Apartment Form */}
         <ApartmentForm 
-          serverPublicKey={serverData?.publicKey}
+          serverPublicKey={serverData.publicKey} // Pass dummy public key
           onApartmentCountChange={setApartmentCount}
         />
       </main>

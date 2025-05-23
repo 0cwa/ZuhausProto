@@ -1,60 +1,41 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { serverKeyPair } from "./crypto";
+import { serverKeyPair } from "./crypto"; // Now a dummy
 import { csvHandler } from "./csv-handler";
 import { matchingEngine } from "./matching";
-import { formSubmissionSchema, adminAuthSchema, PersonCleartext } from "@shared/schema"; // Import PersonCleartext
+import { formSubmissionSchema, adminAuthSchema, PersonCleartext } from "@shared/schema";
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Initialize EC key pair (load from file or generate new)
+  // Initialize EC key pair (now a dummy, no actual key generation/loading)
   await serverKeyPair.init();
 
   // Initialize data from CSV files
   try {
     const apartments = await csvHandler.loadApartments();
-    const people = await csvHandler.loadPeople();
-    const peopleCleartext = await csvHandler.loadPeopleCleartext(); // Load cleartext data
+    // Load people from cleartext CSV for debugging
+    const peopleCleartext = await csvHandler.loadPeopleCleartext(); 
     
     storage.setApartments(apartments);
-    // For debugging, set people in storage from cleartext data if available
-    // Otherwise, use encrypted data and matching engine will decrypt
-    if (peopleCleartext.length > 0) {
-      // Convert PersonCleartext to Person for storage compatibility
-      const peopleForStorage = peopleCleartext.map(p => ({
-        id: p.id,
-        name: p.name,
-        allowRoommates: p.allowRoommates,
-        assignedRoom: p.assignedRoom,
-        requiredPayment: p.requiredPayment,
-        encryptedData: JSON.stringify(p.preferences), // Store preferences as encryptedData for now
-      }));
-      storage.setPeople(peopleForStorage);
-    } else {
-      storage.setPeople(people);
-    }
+    // Set people in storage from cleartext data
+    const peopleForStorage = peopleCleartext.map(p => ({
+      id: p.id,
+      name: p.name,
+      allowRoommates: p.allowRoommates,
+      assignedRoom: p.assignedRoom,
+      requiredPayment: p.requiredPayment,
+      encryptedData: JSON.stringify(p.preferences), // Store preferences as 'encryptedData' for matching engine compatibility
+    }));
+    storage.setPeople(peopleForStorage);
 
   } catch (error) {
     console.error('Error loading CSV data:', error);
   }
 
-  // Get server public key
-  app.get("/api/public-key", async (req, res) => {
-    try {
-      const publicKeyPEM = serverKeyPair.getPublicKeyPEM();
-      const publicKeyHash = serverKeyPair.getPublicKeyHash();
-      
-      res.json({
-        publicKey: publicKeyPEM,
-        hash: publicKeyHash,
-      });
-    } catch (error) {
-      console.error("Error in /api/public-key:", error);
-      res.status(500).json({ message: "Failed to get public key" });
-    }
-  });
+  // Removed /api/public-key endpoint as encryption is bypassed for debugging.
+  // Client will use a dummy public key.
 
   // Get apartment count based on filters
   app.get("/api/apartments/count", async (req, res) => {
@@ -191,31 +172,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ message: "Name already exists" });
       }
       
-      // Create new person (encrypted)
+      // Create new person (encrypted - though now it's just base64 encoded preferences)
       const person = await storage.createPerson({
         name: data.name,
-        encryptedData: data.encryptedData,
+        encryptedData: data.encryptedData, // This is now base64(JSON.stringify(preferences))
         allowRoommates: data.allowRoommates,
       });
       
-      // Update encrypted CSV file
+      // Update encrypted CSV file (people.csv)
       const people = await storage.getPeople();
       await csvHandler.savePeople(people);
 
-      // --- DEBUGGING: Save cleartext preferences to peoplec.csv ---
-      const decryptedPreferences = serverKeyPair.decrypt(data.encryptedData); // Decrypt here
+      // DEBUGGING: Save cleartext preferences to peoplec.csv
+      // The 'encryptedData' from the client is now just base64 encoded preferences.
+      const preferencesJsonString = Buffer.from(data.encryptedData, 'base64').toString('utf8');
       const newPersonCleartext: PersonCleartext = {
         id: person.id,
         name: person.name,
         allowRoommates: person.allowRoommates,
         assignedRoom: person.assignedRoom,
         requiredPayment: person.requiredPayment,
-        preferences: JSON.parse(decryptedPreferences),
+        preferences: JSON.parse(preferencesJsonString),
       };
       const allPeopleCleartext = await csvHandler.loadPeopleCleartext();
       allPeopleCleartext.push(newPersonCleartext);
       await csvHandler.savePeopleCleartext(allPeopleCleartext);
-      // --- END DEBUGGING BLOCK ---
       
       res.json({ message: "Preferences submitted successfully", id: person.id });
     } catch (error) {
@@ -242,7 +223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get people status for admin
   app.get("/api/admin/people-status", async (req, res) => {
     try {
-      // For debugging, load from cleartext CSV if available
+      // Load from cleartext CSV for debugging
       const people = await csvHandler.loadPeopleCleartext(); 
       
       const status = people.map(person => ({
@@ -264,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Run matching algorithm
   app.post("/api/admin/run-matching", async (req, res) => {
     try {
-      // --- DEBUGGING: Load people from cleartext CSV ---
+      // DEBUGGING: Load people from cleartext CSV
       const peopleCleartext = await csvHandler.loadPeopleCleartext();
       // Convert PersonCleartext to Person for matching engine compatibility
       const peopleForMatching = peopleCleartext.map(p => ({
@@ -273,9 +254,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         allowRoommates: p.allowRoommates,
         assignedRoom: p.assignedRoom,
         requiredPayment: p.requiredPayment,
-        encryptedData: JSON.stringify(p.preferences), // Temporarily store preferences here
+        encryptedData: JSON.stringify(p.preferences), // Store preferences as 'encryptedData' for matching engine to parse
       }));
-      // --- END DEBUGGING BLOCK ---
 
       const apartments = await storage.getApartments();
       

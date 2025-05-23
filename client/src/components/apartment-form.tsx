@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RoommateSection } from "./roommate-section";
-import { encryptData } from "@/lib/crypto";
+import { encryptData } from "@/lib/crypto"; // This will now be a no-op base64 encode
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -65,7 +65,7 @@ const formSchema = z.object({
 type FormData = z.infer<typeof formSchema>;
 
 interface ApartmentFormProps {
-  serverPublicKey?: string;
+  serverPublicKey?: string; // This will now be a dummy value
   onApartmentCountChange: (count: number) => void;
 }
 
@@ -272,6 +272,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   }, [watchedValues, onApartmentCountChange]);
 
   const onSubmit = async (data: FormData) => {
+    // serverPublicKey is now a dummy, but we keep the check for type consistency
     if (!serverPublicKey) {
       toast({
         title: "Error",
@@ -283,6 +284,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     setIsSubmitting(true);
     try {
       const { name, allowRoommates, ...preferences } = data;
+      // In debugging mode, encryptData just base64 encodes the preferences JSON.
       const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey);
       await apiRequest("POST", "/api/submit-preferences", {
         name,
@@ -292,14 +294,13 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       toast({
         title: "Success",
         description: "Your preferences have been submitted successfully!",
-        variant: "default", // Explicitly set variant for success
+        variant: "default", 
       });
-      // Reset the form and its submission state
       form.reset(form.getValues(), { keepErrors: false, keepDirty: false, keepIsSubmitted: false, keepTouched: false, keepIsValid: false, keepSubmitCount: false });
     } catch (error: any) {
       const errorMessage = error.message || "Failed to submit preferences";
       let displayMessage = "Failed to submit preferences.";
-      if (errorMessage.includes("409")) { // Check for 409 Conflict status
+      if (errorMessage.includes("409")) { 
         displayMessage = "Name already exists. Please choose a different name.";
       } else {
         displayMessage = errorMessage;
