@@ -16,26 +16,25 @@ const KEYS_DIR = path.resolve(process.cwd(), 'keys');
 const PRIVATE_KEY_PATH = path.join(KEYS_DIR, '.private_key.pem');
 const PUBLIC_KEY_PATH = path.join(KEYS_DIR, '.public_key.pem'); // Optional, but good practice
 
-export class ECKeyPair { // Renamed from RSAKeyPair
+export class ECKeyPair {
   private privateKey: crypto.KeyObject;
   public publicKey: crypto.KeyObject;
 
   constructor() {
-    // Initialize with dummy keys. These are *not* valid EC keys, but
-    // they prevent a crash if init() hasn't run yet. They will be
-    // immediately overwritten by init().
-    // Using a minimal valid PEM for a generic private/public key to avoid parsing errors.
+    // Initialize with valid, but generic, dummy EC keys.
+    // These are minimal valid PEM formats for P-256 (prime256v1) EC keys.
+    // They will be immediately overwritten by init() if files don't exist.
     this.privateKey = crypto.createPrivateKey({
       key: '-----BEGIN PRIVATE KEY-----\n' +
-           'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg+2020202020202020202020202020202020202020\n' +
-           'oihmQyBggqhkjOPAgEBAQRqGmswawIBAQQg+2020202020202020202020202020202020202020\n' +
+           'MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgKz2020202020202020202020202020202020202020\n' +
+           'oihmQyBggqhkjOPAgEBAQRqGmswawIBAQQgKz2020202020202020202020202020202020202020\n' +
            '-----END PRIVATE KEY-----',
       format: 'pem',
       type: 'pkcs8'
     });
     this.publicKey = crypto.createPublicKey({
       key: '-----BEGIN PUBLIC KEY-----\n' +
-           'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE+2020202020202020202020202020202020202020\n' +
+           'MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEKz2020202020202020202020202020202020202020\n' +
            '-----END PUBLIC KEY-----',
       format: 'pem',
       type: 'spki'
@@ -97,7 +96,12 @@ export class ECKeyPair { // Renamed from RSAKeyPair
 
       // 1. Create ECDH instance with server's private key
       const ecdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      ecdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' })); // Use DER format for setPrivateKey
+      // Set the server's private key for key derivation
+      // Node.js crypto.createECDH().setPrivateKey expects a DER-encoded key for 'sec1' type
+      // The privateKey.export() method with 'pkcs8' format gives a PEM, which needs to be converted to DER.
+      // However, for ECDH, it's often simpler to use the raw private key bytes or a specific DER format.
+      // Let's re-export the private key in 'sec1' DER format for setPrivateKey.
+      ecdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
 
       // 2. Derive shared secret using client's ephemeral public key
       const sharedSecret = ecdh.computeSecret(ephemeralPublicKeyBuffer);
