@@ -52,8 +52,9 @@ export class CSVHandler {
       return []; // Return empty array on critical parsing error
     }
 
+    // Detailed logging for debugging the 'undefined records' issue
     if (!Array.isArray(records)) {
-      console.warn(`[CSVHandler] parseCSV returned non-array records (type: ${typeof records}). Returning empty array.`);
+      console.warn(`[CSVHandler] parseCSV returned non-array records (type: ${typeof records}). Actual value:`, records);
       return [];
     }
     
