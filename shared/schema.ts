@@ -38,26 +38,26 @@ export const personPreferencesSchema = z.object({
   hasDryer: z.boolean(),
   dryerWorth: z.number().optional(),
   bidAmount: z.number(),
-  maxRoommates: z.number().optional(),
-  cleanliness: z.number().optional(),
-  quietness: z.number().optional(),
-  guests: z.number().optional(),
-  personalSpace: z.number().optional(),
+  maxRoommates: z.number().min(0).max(4).optional(), // maxRoommates can be 0 if no roommates allowed
+  cleanliness: z.number().min(0).max(100).optional(),
+  quietness: z.number().min(0).max(100).optional(),
+  guests: z.number().min(0).max(100).optional(),
+  personalSpace: z.number().min(0).max(100).optional(),
   sleepTime: z.tuple([z.number(), z.number()]).optional(), // [min, max] linear minutes, can exceed 1439
   wakeTime: z.tuple([z.number(), z.number()]).optional(), // [min, max] linear minutes
 });
 
-// Person data schema (for people.csv - encrypted)
+// Person data schema (for people.csv - now directly includes preferences)
 export const personSchema = z.object({
   id: z.string(),
   name: z.string(),
-  encryptedData: z.string(), // This will now be a JSON string containing iv, encryptedData, ephemeralPublicKey
+  preferences: personPreferencesSchema, // Directly include preferences
   allowRoommates: z.boolean(),
   assignedRoom: z.string().optional(),
   requiredPayment: z.number().optional(),
 });
 
-// Person data schema (for peoplec.csv - cleartext preferences)
+// Person data schema (for peoplec.csv - cleartext preferences, now same as Person)
 export const personCleartextSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -71,7 +71,7 @@ export const personCleartextSchema = z.object({
 export const formSubmissionSchema = z.object({
   name: z.string().min(1, "Name is required"),
   allowRoommates: z.boolean(),
-  encryptedData: z.string(), // This will now be a base64 encoded JSON string
+  encryptedData: z.string(), // This will now be a base64 encoded JSON string of preferences
 });
 
 // Admin authentication schema
@@ -95,8 +95,8 @@ export const matchingResultSchema = z.object({
 
 export type Apartment = z.infer<typeof apartmentSchema>;
 export type PersonPreferences = z.infer<typeof personPreferencesSchema>;
-export type Person = z.infer<typeof personSchema>;
-export type PersonCleartext = z.infer<typeof personCleartextSchema>; // New type
+export type Person = z.infer<typeof personSchema>; // Updated to include preferences directly
+export type PersonCleartext = z.infer<typeof personCleartextSchema>; // Now identical to Person
 export type FormSubmission = z.infer<typeof formSubmissionSchema>;
 export type AdminAuth = z.infer<typeof adminAuthSchema>;
 export type MatchingResult = z.infer<typeof matchingResultSchema>;

@@ -4,10 +4,10 @@ import { storage } from "./storage";
 import { serverKeyPair } from "./crypto"; // Now a dummy
 import { csvHandler } from "./csv-handler";
 import { matchingEngine } from "./matching";
-import { formSubmissionSchema, adminAuthSchema, PersonCleartext } from "@shared/schema";
-import { exec } from 'child_process';
+import { formSubmissionSchema, adminAuthSchema, PersonCleartext, MatchingResult } from "@shared/schema";
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs/promises'; // Import fs.promises for file operations
 
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
@@ -15,7 +15,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PYTHON_SCRIPT_PATH = path.resolve(__dirname, '../data/apartment_matcher.py');
+const BIDDING_ASSIGNMENTS_CSV_PATH = path.resolve(__dirname, '../data/bidding_assignments.csv');
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize EC key pair (now a dummy, no actual key generation/loading)
@@ -28,7 +28,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     storage.setApartments(apartments);
     // Set people in storage from people.csv data
-    // The 'encryptedData' field will contain the base64 encoded JSON string of preferences
+    // The 'preferences' field will now contain the parsed JSON preferences
     storage.setPeople(peopleFromPeopleCSV);
 
   } catch (error) {
@@ -168,10 +168,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ message: "Name already exists" });
       }
       
+      // In debug mode, encryptedData is actually base64 encoded preferences JSON string
+      const preferencesJsonString = Buffer.from(data.encryptedData, 'base64').toString('utf8');
+      const preferences = JSON.parse(preferencesJsonString);
+
       // Create new person in storage
       const person = await storage.createPerson({
         name: data.name,
-        encryptedData: data.encryptedData, // This is base64(JSON.stringify(preferences))
+        preferences: preferences, // Store parsed preferences directly
         allowRoommates: data.allowRoommates,
       });
       
@@ -179,15 +183,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const allPeopleFromStorage = await storage.getPeople();
       await csvHandler.savePeople(allPeopleFromStorage);
 
-      // DEBUGGING: Save cleartext preferences to peoplec.csv
-      const preferencesJsonString = Buffer.from(data.encryptedData, 'base64').toString('utf8');
+      // For peoplec.csv, it's now identical to people.csv in terms of content
+      // but we keep it separate for historical context/potential future divergence.
       const newPersonCleartext: PersonCleartext = {
         id: person.id,
         name: person.name,
         allowRoommates: person.allowRoommates,
         assignedRoom: person.assignedRoom,
         requiredPayment: person.requiredPayment,
-        preferences: JSON.parse(preferencesJsonString),
+        preferences: person.preferences, // Use the same preferences
       };
       const allPeopleCleartext = await csvHandler.loadPeopleCleartext();
       allPeopleCleartext.push(newPersonCleartext);
@@ -238,60 +242,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // New endpoint to run the Python matching script
-  app.post("/api/admin/run-python-matching", async (req, res) => {
-    console.log(`Attempting to run Python script: ${PYTHON_SCRIPT_PATH}`);
-    exec(`python3 ${PYTHON_SCRIPT_PATH}`, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`exec error: ${error}`);
-        return res.status(500).json({ message: "Failed to run Python matching script", error: stderr });
+  // Run matching algorithm (now using TypeScript matching engine)
+  app.post("/api/admin/run-matching", async (req, res) => {
+    try {
+      // Get people from storage (sourced from people.csv, now with preferences directly)
+      const peopleForMatching = await storage.getPeople();
+      const apartments = await storage.getApartments();
+      
+      // Filter out already assigned people if desired, or re-match everyone
+      const unassignedPeople = peopleForMatching.filter(person => !person.assignedRoom);
+      
+      if (unassignedPeople.length === 0) {
+        return res.json({ message: "No unassigned people to match", results: [] });
       }
-      if (stderr) {
-        console.warn(`Python script stderr: ${stderr}`);
-      }
-      console.log(`Python script stdout: ${stdout}`);
-      res.json({ message: "Python matching script executed successfully", output: stdout });
-    });
+      
+      const results = await matchingEngine.runMatching(unassignedPeople, apartments);
+      
+      // Save matching results to bidding_assignments.csv
+      await csvHandler.saveBiddingAssignments(results.flatMap(r => 
+        r.assignedPeople.map(p => ({
+          apartment_name: r.apartmentName,
+          person_id: p.id,
+          person_name: p.name,
+          expected_payment: p.payment,
+          adjusted_bid: r.totalPayment / r.assignedPeople.length, // Simplified for now, actual adjusted bid is per person
+          group_winning_bid: r.totalPayment,
+          second_highest_bid_for_apt: 0, // This info is not directly available from MatchingResult, would need to be passed from engine
+          group_members_in_winning_bid: r.assignedPeople.map(ap => ap.name).join(", ")
+        }))
+      ));
+
+      // Save matching results to storage (in-memory) - optional, as CSV is source of truth now
+      await storage.saveMatchingResults(results);
+      
+      res.json({
+        message: "Matching completed successfully",
+        results,
+        assignedCount: results.reduce((sum, r) => sum + r.assignedPeople.length, 0),
+      });
+    } catch (error) {
+      console.error('Error running matching:', error);
+      res.status(500).json({ message: "Failed to run matching algorithm" });
+    }
   });
-
-  // Run matching algorithm (this endpoint is now deprecated/replaced by run-python-matching)
-  // app.post("/api/admin/run-matching", async (req, res) => {
-  //   try {
-  //     // Get people from storage (sourced from people.csv)
-  //     // The 'encryptedData' field contains the base64 encoded JSON string of preferences.
-  //     // The dummy matchingEngine.decryptPersonData expects this.
-  //     const peopleForMatching = await storage.getPeople();
-
-  //     const apartments = await storage.getApartments();
-      
-  //     // Filter out already assigned people
-  //     const unassignedPeople = peopleForMatching.filter(person => !person.assignedRoom);
-      
-  //     if (unassignedPeople.length === 0) {
-  //       return res.json({ message: "No unassigned people to match", results: [] });
-  //     }
-      
-  //     const results = await matchingEngine.runMatching(unassignedPeople, apartments);
-      
-  //     // Save matching results to storage (in-memory)
-  //     await storage.saveMatchingResults(results);
-      
-  //     res.json({
-  //       message: "Matching completed successfully",
-  //       results,
-  //       assignedCount: results.reduce((sum, r) => sum + r.assignedPeople.length, 0),
-  //     });
-  //   } catch (error) {
-  //     console.error('Error running matching:', error);
-  //     res.status(500).json({ message: "Failed to run matching algorithm" });
-  //   }
-  // });
 
   // Assign rooms (finalize assignments)
   app.post("/api/admin/assign-rooms", async (req, res) => {
     try {
-      // Load results from bidding_assignments.csv generated by Python script
-      const biddingAssignmentsContent = await fs.promises.readFile(path.join(__dirname, '../data/bidding_assignments.csv'), 'utf8');
+      // Load results from bidding_assignments.csv generated by Python script (now TS script)
+      const biddingAssignmentsContent = await fs.promises.readFile(BIDDING_ASSIGNMENTS_CSV_PATH, 'utf8');
       const parsedAssignments = await csvHandler.parseCSV(biddingAssignmentsContent);
 
       if (parsedAssignments.length < 2) { // Check for headers + at least one data row
@@ -301,7 +300,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const headers = parsedAssignments[0];
       const dataRows = parsedAssignments.slice(1);
 
-      const matchingResults: MatchingResult[] = [];
       const apartmentMap = new Map<string, MatchingResult>();
 
       dataRows.forEach(row => {
@@ -310,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const personName = row[headers.indexOf('PersonName')];
         const expectedPayment = parseFloat(row[headers.indexOf('ExpectedPayment')]);
         const groupWinningBid = parseFloat(row[headers.indexOf('GroupWinningBid')]);
-        const groupMembersInWinningBid = row[headers.indexOf('GroupMembersInWinningBid')];
+        // const groupMembersInWinningBid = row[headers.indexOf('GroupMembersInWinningBid')]; // Not directly used for assignment logic
 
         let result = apartmentMap.get(apartmentName);
         if (!result) {
@@ -329,7 +327,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             capacity: apt.numBedrooms,
           };
           apartmentMap.set(apartmentName, result);
-          matchingResults.push(result);
         }
 
         result.assignedPeople.push({
@@ -341,7 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       
       // Update people in storage (which will then be saved to people.csv)
-      for (const result of matchingResults) {
+      for (const result of Array.from(apartmentMap.values())) {
         for (const assignedPerson of result.assignedPeople) {
           await storage.updatePerson(assignedPerson.id, {
             assignedRoom: result.apartmentName,
@@ -354,7 +351,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Also update peoplec.csv for debugging consistency
       const allPeopleCleartext = await csvHandler.loadPeopleCleartext();
-      for (const result of matchingResults) {
+      for (const result of Array.from(apartmentMap.values())) {
         for (const assignedPerson of result.assignedPeople) {
           const personIndex = allPeopleCleartext.findIndex(p => p.id === assignedPerson.id);
           if (personIndex !== -1) {
@@ -366,7 +363,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await csvHandler.savePeopleCleartext(allPeopleCleartext);
       
       // Update apartments with new tenant counts and roommate availability
-      for (const result of matchingResults) {
+      for (const result of Array.from(apartmentMap.values())) {
         const apartment = await storage.getApartment(result.apartmentId);
         if (apartment) {
           const newTenants = result.tenants;
@@ -388,7 +385,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         message: "Rooms assigned successfully",
-        assignedCount: matchingResults.reduce((sum, r) => sum + r.assignedPeople.length, 0),
+        assignedCount: Array.from(apartmentMap.values()).reduce((sum, r) => sum + r.assignedPeople.length, 0),
       });
     } catch (error) {
       console.error('Error assigning rooms:', error);
@@ -399,7 +396,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get matching results (now reads from bidding_assignments.csv)
   app.get("/api/admin/matching-results", async (req, res) => {
     try {
-      const biddingAssignmentsContent = await fs.promises.readFile(path.join(__dirname, '../data/bidding_assignments.csv'), 'utf8');
+      const biddingAssignmentsContent = await fs.promises.readFile(BIDDING_ASSIGNMENTS_CSV_PATH, 'utf8');
       const parsedAssignments = await csvHandler.parseCSV(biddingAssignmentsContent);
 
       if (parsedAssignments.length < 2) {
@@ -418,7 +415,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const expectedPayment = parseFloat(row[headers.indexOf('ExpectedPayment')]);
         const groupWinningBid = parseFloat(row[headers.indexOf('GroupWinningBid')]);
         const secondHighestBidForApt = parseFloat(row[headers.indexOf('SecondHighestBidForApt')]);
-        const groupMembersInWinningBid = row[headers.indexOf('GroupMembersInWinningBid')];
+        // const groupMembersInWinningBid = row[headers.indexOf('GroupMembersInWinningBid')]; // Not directly used for display
 
         let result = resultsMap.get(apartmentName);
         if (!result) {

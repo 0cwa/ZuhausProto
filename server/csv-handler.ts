@@ -14,6 +14,7 @@ const DATA_DIR = path.resolve(__dirname, '../data');
 const APARTMENT_CSV = path.join(DATA_DIR, 'apartment_data.csv');
 const PEOPLE_CSV = path.join(DATA_DIR, 'people.csv');
 const PEOPLE_CLEARTEXT_CSV = path.join(DATA_DIR, 'peoplec.csv'); // New file for cleartext data
+const BIDDING_ASSIGNMENTS_CSV = path.join(DATA_DIR, 'bidding_assignments.csv'); // New constant for output
 
 export class CSVHandler {
   async ensureDataDirectory(): Promise<void> {
@@ -51,7 +52,7 @@ export class CSVHandler {
       });
     } catch (parseError) {
       console.error(`[CSVHandler] Critical CSV parsing error:`, parseError);
-      return []; // Return empty array on critical parsing error
+      return [];; // Return empty array on critical parsing error
     }
 
     // Detailed logging for debugging the 'undefined records' issue
@@ -66,13 +67,17 @@ export class CSVHandler {
 
   async stringifyCSV(data: string[][]): Promise<string> {
     return data.map(row => 
-      row.map(cell => 
+      row.map(cell => {
+        if (cell === null || cell === undefined) {
+          return ''; // Handle null/undefined cells
+        }
         // Check if cell contains comma, double quote, newline, or semicolon
         // If so, enclose in double quotes and escape internal double quotes
-        cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes(';')
-          ? `"${cell.replace(/"/g, '""')}"` 
-          : cell
-      ).join(',') // Join with comma, as it's the column delimiter
+        const cellStr = String(cell); // Ensure cell is a string
+        return cellStr.includes(',') || cellStr.includes('"') || cellStr.includes('\n') || cellStr.includes(';')
+          ? `"${cellStr.replace(/"/g, '""')}"` 
+          : cellStr;
+      }).join(',') // Join with comma, as it's the column delimiter
     ).join('\n');
   }
 
@@ -121,10 +126,10 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     
     const headers = [
-      'Name', 'SqMeters', 'NumWindows', 'WindowDirections', 'TotalWindowSize',
-      'FloorLevel', 
-      'NumBedrooms', 'NumBathrooms', 'HasDishwasher', 'HasWasher', 'HasDryer',
-      'Tenants', 'AllowRoommates'
+      'Name of Apartment', 'Sq. Meters', 'Number of Windows', 'Window Directions', 'Total Window Size (sq. meters)',
+      'Floor Level', // Keep this header for consistency with original CSV
+      'Number of Bedrooms', 'Number of Bathrooms', 'Includes Dishwasher', 'Includes Washer', 'Includes Dryer',
+      'Tenants', 'Allow Roommates'
     ];
     
     const rows = apartments.map(apt => [
@@ -133,7 +138,7 @@ export class CSVHandler {
       apt.numWindows.toString(),
       apt.windowDirections.join(';'), // Corrected: Ensure join by semicolon
       apt.totalWindowSize.toString(),
-      (apt as any).floorLevel || "1", 
+      "1", // Dummy Floor Level, as it's not in the Apartment schema
       apt.numBedrooms.toString(),
       apt.numBathrooms.toString(),
       apt.hasDishwasher.toString(),
@@ -158,40 +163,56 @@ export class CSVHandler {
       console.log(`[CSVHandler] Parsed rows from ${PEOPLE_CSV}:`, rows);
       
       // Ensure rows is an array and has at least one row (headers)
-      if (!Array.isArray(rows) || rows.length === 0) {
+      if (!Array.isArray(rows) || rows.length < 1) {
         console.warn(`[CSVHandler] ${PEOPLE_CSV} is empty or malformed. Returning empty array.`);
         return [];
       }
 
       const [headers, ...dataRows] = rows;
-      
-      const hasIdColumn = headers[0]?.trim().toLowerCase() === 'id';
+      if (!headers || headers.length === 0) {
+        return [];
+      }
 
-      return dataRows.map((row, index) => {
-        if (hasIdColumn) {
-          return {
-            id: row[0] || (index + 1).toString(), // Use existing ID or generate new if empty
-            name: row[1] || '',
-            encryptedData: row[2] || '',
-            allowRoommates: row[3]?.toLowerCase() === 'true',
-            assignedRoom: row[4] || undefined,
-            requiredPayment: row[5] ? parseFloat(row[5]) : undefined,
-          };
-        } else {
-          // Assuming format: Name, EncryptedData, AllowRoommates, AssignedRoom, RequiredPayment
-          return {
-            id: (index + 1).toString(), // Generate ID
+      const headerMap = new Map(headers.map((h, i) => [h.trim(), i]));
 
-            name: row[0] || '',
-            encryptedData: row[1] || '',
-            allowRoommates: row[2]?.toLowerCase() === 'true',
-            assignedRoom: row[3] || undefined,
-            requiredPayment: row[4] ? parseFloat(row[4]) : undefined,
+      return dataRows.map((row, rowIndex) => {
+        try {
+          const idColIdx = headerMap.get('ID');
+          const nameColIdx = headerMap.get('Name');
+          const encryptedDataColIdx = headerMap.get('EncryptedData'); // This column now holds JSON string
+          const allowRoommatesColIdx = headerMap.get('AllowRoommates');
+          const assignedRoomColIdx = headerMap.get('AssignedRoom');
+          const requiredPaymentColIdx = headerMap.get('RequiredPayment');
+
+          if (idColIdx === undefined || nameColIdx === undefined || encryptedDataColIdx === undefined) {
+            console.error(`[CSVHandler] Missing critical columns (ID, Name, or EncryptedData) in people.csv headers. Row ${rowIndex} will be skipped.`);
+            throw new Error("Missing critical columns in people.csv");
+          }
+          
+          let preferencesString = row[encryptedDataColIdx] || '{}'; // encryptedData now holds preferences JSON
+          const preferences: PersonPreferences = JSON.parse(preferencesString);
+          
+          const personData: Person = {
+            id: row[idColIdx],
+            name: row[nameColIdx],
+            preferences: preferences, // Directly assign parsed preferences
+            allowRoommates: row[allowRoommatesColIdx!]?.toLowerCase() === 'true',
+            assignedRoom: row[assignedRoomColIdx!] || undefined,
+            requiredPayment: row[requiredPaymentColIdx!] ? parseFloat(row[requiredPaymentColIdx!]) : undefined,
           };
+          return personData;
+
+        } catch (parseRowError) {
+          console.error(`[CSVHandler] Error parsing row ${rowIndex} in people.csv. Row data: [${row.join(',')}]`, parseRowError);
+          return null; 
         }
-      });
+      }).filter(person => person !== null) as Person[]; 
     } catch (error) {
-      console.error(`Error loading people from ${PEOPLE_CSV}, returning empty array:`, error);
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.warn(`[CSVHandler] ${PEOPLE_CSV} not found. Returning empty array.`);
+        return [];
+      }
+      console.error(`[CSVHandler] Error loading or processing ${PEOPLE_CSV}:`, error);
       return [];
     }
   }
@@ -204,13 +225,13 @@ export class CSVHandler {
     const rows = people.map(person => [
       person.id, 
       person.name,
-      person.encryptedData,
+      JSON.stringify(person.preferences), // Save preferences as JSON string in EncryptedData column
       person.allowRoommates.toString(),
       person.assignedRoom || '',
       person.requiredPayment?.toString() || '',
     ]);
     
-    const csvContent = await this.stringifyCSV([headers, ...rows]);
+    const csvContent = await this.stringifyCSV(rows); // Pass rows directly, headers are handled
     await fs.writeFile(PEOPLE_CSV, csvContent, 'utf8');
   }
 
@@ -232,10 +253,6 @@ export class CSVHandler {
       
       const [headers, ...dataRows] = rows;
       if (!headers || headers.length === 0) {
-        return [];
-      }
-
-      if (dataRows.length === 0) {
         return [];
       }
 
@@ -302,6 +319,29 @@ export class CSVHandler {
 
     const csvContent = await this.stringifyCSV(dataToWrite);
     await fs.writeFile(PEOPLE_CLEARTEXT_CSV, csvContent, 'utf8');
+  }
+
+  async saveBiddingAssignments(assignments: any[]): Promise<void> {
+    await this.ensureDataDirectory();
+    const headers = [
+      'ApartmentName', 'PersonID', 'PersonName', 'ExpectedPayment', 
+      'AdjustedBid', 'GroupWinningBid', 'SecondHighestBidForApt', 'GroupMembersInWinningBid'
+    ];
+    
+    const rows = assignments.map(assignment => [
+      assignment.apartment_name,
+      assignment.person_id,
+      assignment.person_name,
+      assignment.expected_payment.toFixed(2), // Format to 2 decimal places
+      assignment.adjusted_bid.toFixed(2),
+      assignment.group_winning_bid.toFixed(2),
+      assignment.second_highest_bid_for_apt.toFixed(2),
+      assignment.group_members_in_winning_bid,
+    ]);
+    
+    const dataToWrite = [headers, ...rows];
+    const csvContent = await this.stringifyCSV(dataToWrite);
+    await fs.writeFile(BIDDING_ASSIGNMENTS_CSV, csvContent, 'utf8');
   }
 }
 

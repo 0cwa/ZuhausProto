@@ -1,212 +1,171 @@
-import { Apartment, Person, PersonPreferences, MatchingResult, PersonCleartext } from '@shared/schema';
-// Removed serverKeyPair import as decryption is bypassed for debugging.
+import { Apartment, Person, PersonPreferences, MatchingResult } from '@shared/schema';
+import { euclideanDistance } from './utils'; // Assuming a utils file for math operations
 
-// DecodedPerson will now directly contain preferences
-interface DecodedPerson extends PersonCleartext {}
+// Define types for internal use, mirroring Python classes
+interface DecodedPerson extends Person {
+  socialVector: number[];
+}
 
 interface RoommateGroup {
   members: DecodedPerson[];
   compatibility: number;
-  maxSize: number;
+  maxSize: number; // Max number of people in this group (including self)
 }
 
 interface ApartmentBid {
   apartment: Apartment;
-  bidder: DecodedPerson | RoommateGroup;
-  effectiveBid: number;
-  isGroup: boolean;
+  bidder: RoommateGroup; // Bidder is always a group (even if size 1)
+  totalGroupBid: number;
+  individualAdjustedBids: { [personId: string]: number };
+  groupMembersNames: string[];
 }
 
+// Social preference keys and their normalization factor (max value for 0-1 scaling)
+const SOCIAL_PREF_KEY_NORMS: { [key: string]: number } = {
+  "cleanliness": 100.0,
+  "quietness": 100.0,
+  "guests": 100.0,
+  "personalSpace": 100.0,
+  "sleepTime_mid": 1440.0, // Midpoint of sleepTime range (minutes)
+  "wakeTime_mid": 1440.0   // Midpoint of wakeTime range (minutes)
+};
+
 export class MatchingEngine {
-  // This method is now simplified as preferences are directly available
-  // It expects 'person.encryptedData' to actually contain the JSON string of preferences.
-  private decryptPersonData(person: Person): DecodedPerson {
-    try {
-      const preferences = JSON.parse(person.encryptedData) as PersonPreferences;
-      return { 
-        id: person.id,
-        name: person.name,
-        allowRoommates: person.allowRoommates,
-        assignedRoom: person.assignedRoom,
-        requiredPayment: person.requiredPayment,
-        preferences: preferences,
-      };
-    } catch (error) {
-      console.error(`Failed to parse preferences for person ${person.name}: ${error}`);
-      throw new Error(`Failed to parse preferences for person ${person.name}`);
+
+  // This method now just adds the social vector to the Person object
+  private preparePersonForMatching(person: Person): DecodedPerson {
+    const preferences = person.preferences;
+    const socialVector: number[] = [];
+
+    // Handle time preferences by taking midpoints
+    const sleepTimeRange = preferences.sleepTime || [0, 0];
+    const wakeTimeRange = preferences.wakeTime || [0, 0];
+    const midSleepTime = (sleepTimeRange[0] + sleepTimeRange[1]) / 2.0;
+    const midWakeTime = (wakeTimeRange[0] + wakeTimeRange[1]) / 2.0;
+
+    const tempPrefs = {
+      ...preferences,
+      sleepTime_mid: midSleepTime,
+      wakeTime_mid: midWakeTime
+    };
+
+    for (const key in SOCIAL_PREF_KEY_NORMS) {
+      const value = tempPrefs[key as keyof typeof tempPrefs] !== undefined ? tempPrefs[key as keyof typeof tempPrefs] : 0;
+      const normFactor = SOCIAL_PREF_KEY_NORMS[key];
+      socialVector.push(typeof value === 'number' ? (value / normFactor) : 0);
     }
+
+    return { ...person, socialVector };
   }
 
-  private calculateInterpersonalCompatibility(person1: DecodedPerson, person2: DecodedPerson): number {
-    const factors = ['cleanliness', 'quietness', 'guests', 'personalSpace'] as const;
-    let totalScore = 0;
-    let validFactors = 0;
-
-    for (const factor of factors) {
-      const val1 = person1.preferences[factor];
-      const val2 = person2.preferences[factor];
-      
-      if (val1 !== undefined && val2 !== undefined) {
-        const difference = Math.abs(val1 - val2);
-        const similarity = Math.max(0, 100 - difference);
-        totalScore += similarity;
-        validFactors++;
-      }
-    }
-
-    const sleepRange1 = person1.preferences.sleepTime;
-    const sleepRange2 = person2.preferences.sleepTime;
-    const wakeRange1 = person1.preferences.wakeTime;
-    const wakeRange2 = person2.preferences.wakeTime;
-
-    if (sleepRange1 && sleepRange2 && sleepRange1.length === 2 && sleepRange2.length === 2) {
-      const midSleep1 = (sleepRange1[0] + sleepRange1[1]) / 2;
-      const midSleep2 = (sleepRange2[0] + sleepRange2[1]) / 2;
-      const normMidSleep1 = midSleep1 % 1440;
-      const normMidSleep2 = midSleep2 % 1440;
-      const sleepDiff = Math.min(Math.abs(normMidSleep1 - normMidSleep2), 1440 - Math.abs(normMidSleep1 - normMidSleep2));
-      const sleepCompatibility = Math.max(0, 100 - (sleepDiff / 360) * 100);
-      totalScore += sleepCompatibility;
-      validFactors++;
-    }
-
-    if (wakeRange1 && wakeRange2 && wakeRange1.length === 2 && wakeRange2.length === 2) {
-      const midWake1 = (wakeRange1[0] + wakeRange1[1]) / 2;
-      const midWake2 = (wakeRange2[0] + wakeRange2[1]) / 2;
-      const normMidWake1 = midWake1 % 1440;
-      const normMidWake2 = normMidWake2 % 1440;
-      const wakeDiff = Math.min(Math.abs(normMidWake1 - normMidWake2), 1440 - Math.abs(normMidWake1 - normMidWake2));
-      const wakeCompatibility = Math.max(0, 100 - (wakeDiff / 360) * 100);
-      totalScore += wakeCompatibility;
-      validFactors++;
-    }
-
-    return validFactors > 0 ? totalScore / validFactors : 0;
+  private calculateSocialCompatibility(person1: DecodedPerson, person2: DecodedPerson): number {
+    // Euclidean distance on normalized social vectors
+    const dist = euclideanDistance(person1.socialVector, person2.socialVector);
+    // Convert distance to similarity: higher score is better, so -dist
+    return -dist;
   }
 
-  private canShareApartment(people: DecodedPerson[], apartment: Apartment): boolean {
-    if (people.length > apartment.numBedrooms) return false;
-    if (people.length > 1 && !people.every(p => p.allowRoommates)) return false;
-    return true;
-  }
-
-  private formRoommateGroups(people: DecodedPerson[]): RoommateGroup[] {
+  private generatePotentialGroups(unassignedPeople: DecodedPerson[]): RoommateGroup[] {
+    const potentialGroupsSet = new Set<string>(); // To store stringified sorted person IDs for uniqueness
     const groups: RoommateGroup[] = [];
-    const compatibilityThreshold = 60; 
 
-    people.forEach(person => {
-      groups.push({
-        members: [person],
-        compatibility: 100,
-        maxSize: 1,
-      });
-    });
+    for (const pAnchor of unassignedPeople) {
+      // Group of 1 (person themselves)
+      const singleGroupIds = [pAnchor.id].sort();
+      const singleGroupKey = JSON.stringify(singleGroupIds);
+      if (!potentialGroupsSet.has(singleGroupKey)) {
+        potentialGroupsSet.add(singleGroupKey);
+        groups.push({
+          members: [pAnchor],
+          compatibility: 100, // Single person is perfectly compatible with themselves
+          maxSize: 1, // A single person group has a max size of 1
+        });
+      }
 
-    for (let i = 0; i < people.length; i++) {
-      for (let j = i + 1; j < people.length; j++) {
-        const person1 = people[i];
-        const person2 = people[j];
-        
-        if (!person1.allowRoommates || !person2.allowRoommates) continue;
-        
-        const compatibility = this.calculateInterpersonalCompatibility(person1, person2);
-        if (compatibility >= compatibilityThreshold) {
-          const maxRoommates1 = person1.preferences.maxRoommates === undefined ? 1 : person1.preferences.maxRoommates;
-          const maxRoommates2 = person2.preferences.maxRoommates === undefined ? 1 : person2.preferences.maxRoommates;
+      // Groups with roommates
+      const roommateCandidates = unassignedPeople.filter(p => p.id !== pAnchor.id);
+
+      // Iterate from 1 up to pAnchor's max_roommates
+      for (let numRoommates = 1; numRoommates <= (pAnchor.preferences.maxRoommates || 0); numRoommates++) {
+        if (numRoommates > roommateCandidates.length) {
+          continue;
+        }
+
+        // Score candidates based on compatibility with pAnchor
+        const scoredCandidates = roommateCandidates
+          .map(candidate => ({
+            score: this.calculateSocialCompatibility(pAnchor, candidate),
+            person: candidate
+          }))
+          .sort((a, b) => b.score - a.score); // Sort descending by score
+
+        // Generate combinations of roommates
+        const combinations = this.getCombinations(scoredCandidates, numRoommates);
+
+        for (const combo of combinations) {
+          const currentGroupMembers = [pAnchor, ...combo.map(c => c.person)];
           
-          if (maxRoommates1 >= 1 && maxRoommates2 >= 1) { 
-            groups.push({
-              members: [person1, person2],
-              compatibility,
-              maxSize: Math.min(maxRoommates1 + 1, maxRoommates2 + 1), 
-            });
+          // Check if all members in the potential group allow roommates and are willing to be in a group of this size
+          const allAllowRoommates = currentGroupMembers.every(p => p.allowRoommates);
+          const allWillingSize = currentGroupMembers.every(p => (p.preferences.maxRoommates || 0) >= (currentGroupMembers.length - 1));
+
+          if (!allAllowRoommates || !allWillingSize) {
+            continue;
+          }
+
+          // Calculate average compatibility for the group
+          let totalCompatibility = 0;
+          let pairCount = 0;
+          for (let i = 0; i < currentGroupMembers.length; i++) {
+            for (let j = i + 1; j < currentGroupMembers.length; j++) {
+              totalCompatibility += this.calculateSocialCompatibility(currentGroupMembers[i], currentGroupMembers[j]);
+              pairCount++;
+            }
+          }
+          const avgCompatibility = pairCount > 0 ? totalCompatibility / pairCount : 100; // If only one person, compatibility is 100
+
+          // Only add if compatibility is above a threshold (e.g., 60, similar to Python's implicit threshold)
+          const compatibilityThreshold = -100; // A negative threshold for negative distance scores
+          if (avgCompatibility >= compatibilityThreshold) {
+            const groupIds = currentGroupMembers.map(p => p.id).sort();
+            const groupKey = JSON.stringify(groupIds);
+
+            if (!potentialGroupsSet.has(groupKey)) {
+              potentialGroupsSet.add(groupKey);
+              groups.push({
+                members: currentGroupMembers,
+                compatibility: avgCompatibility,
+                maxSize: currentGroupMembers.reduce((min, p) => Math.min(min, (p.preferences.maxRoommates || 0) + 1), Infinity),
+              });
+            }
           }
         }
       }
     }
-    
-    const allowRoommatesPeople = people.filter(p => p.allowRoommates);
-    for (let size = 3; size <= 5; size++) {
-      this.generateCombinations(allowRoommatesPeople, size).forEach(combination => {
-        let totalCompatibility = 0;
-        let pairCount = 0;
-        let canFormGroup = true;
-        let minMaxSize = size;
-
-        for (let i = 0; i < combination.length && canFormGroup; i++) {
-          const maxRoommates = combination[i].preferences.maxRoommates === undefined ? 1 : combination[i].preferences.maxRoommates;
-          minMaxSize = Math.min(minMaxSize, maxRoommates + 1);
-          
-          if (maxRoommates < size - 1) { 
-            canFormGroup = false;
-            break;
-          }
-          
-          for (let j = i + 1; j < combination.length; j++) {
-            const compatibility = this.calculateInterpersonalCompatibility(combination[i], combination[j]);
-            if (compatibility < compatibilityThreshold) {
-              canFormGroup = false;
-              break;
-            }
-            totalCompatibility += compatibility;
-            pairCount++;
-          }
-        }
-
-        if (canFormGroup && pairCount > 0) {
-          groups.push({
-            members: combination,
-            compatibility: totalCompatibility / pairCount,
-            maxSize: minMaxSize,
-          });
-        }
-      });
-    }
-
     return groups.sort((a, b) => b.compatibility - a.compatibility);
   }
 
-  private generateCombinations<T>(array: T[], size: number): T[][] {
-    if (size === 0) return [[]];
-    if (size < 0 || size > array.length) return [];
-    if (size === array.length) return [array];
-    if (size === 1) return array.map(item => [item]);
-    
-    const combinations: T[][] = [];
-    for (let i = 0; i <= array.length - size; i++) {
-      const smaller = this.generateCombinations(array.slice(i + 1), size - 1);
-      smaller.forEach(combination => {
-        combinations.push([array[i], ...combination]);
-      });
+  private getCombinations<T>(arr: T[], k: number): T[][] {
+    const result: T[][] = [];
+    function backtrack(start: number, currentCombination: T[]) {
+      if (currentCombination.length === k) {
+        result.push([...currentCombination]);
+        return;
+      }
+      for (let i = start; i < arr.length; i++) {
+        currentCombination.push(arr[i]);
+        backtrack(i + 1, currentCombination);
+        currentCombination.pop();
+      }
     }
-    return combinations;
+    backtrack(0, []);
+    return result;
   }
 
-  private calculateEffectiveBid(
-    bidder: DecodedPerson | RoommateGroup,
-    apartment: Apartment,
-    isGroup: boolean
-  ): number {
-    if (isGroup) {
-      const group = bidder as RoommateGroup;
-      let totalBid = 0;
-      let totalDeduction = 0;
-
-      group.members.forEach(person => {
-        totalBid += person.preferences.bidAmount;
-        totalDeduction += this.calculateCharacteristicDeduction(person.preferences, apartment);
-      });
-
-      return Math.max(0, totalBid - totalDeduction);
-    } else {
-      const person = bidder as DecodedPerson;
-      const deduction = this.calculateCharacteristicDeduction(person.preferences, apartment);
-      return Math.max(0, person.preferences.bidAmount - deduction);
-    }
-  }
-
-  private calculateCharacteristicDeduction(preferences: PersonPreferences, apartment: Apartment): number {
+  private calculateAdjustedBid(person: DecodedPerson, apartment: Apartment, groupSize: number): number {
+    let baseBid = person.preferences.bidAmount;
     let deduction = 0;
+    const prefs = person.preferences;
 
     const checkRange = (value: number, prefRange: [number, number] | undefined, worth: number | undefined) => {
       if (prefRange && prefRange.length === 2) {
@@ -217,133 +176,228 @@ export class MatchingEngine {
       }
     };
 
-    checkRange(apartment.sqMeters, preferences.sqMeters, preferences.sqMetersWorth);
-    checkRange(apartment.numWindows, preferences.numWindows, preferences.numWindowsWorth);
-    checkRange(apartment.totalWindowSize, preferences.totalWindowSize, preferences.totalWindowSizeWorth);
-    checkRange(apartment.numBedrooms, preferences.numBedrooms, preferences.numBedroomsWorth);
-    checkRange(apartment.numBathrooms, preferences.numBathrooms, preferences.numBathroomsWorth);
+    // Sq. Meters
+    checkRange(apartment.sqMeters, prefs.sqMeters, prefs.sqMetersWorth);
 
-    if (preferences.windowDirections && preferences.windowDirections.length > 0) {
-      const selectedDirections = preferences.windowDirections;
-      const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
-      // Filter apartment's directions to see how many match the selected ones
-      const matchCount = selectedDirections.filter(dir => apartment.windowDirections.includes(dir)).length;
-      
-      if (matchCount < requiredMatches) {
-        deduction += preferences.windowDirectionsWorth || 0;
+    // Number of Windows
+    checkRange(apartment.numWindows, prefs.numWindows, prefs.numWindowsWorth);
+
+    // Window Directions
+    const prefWDirs = new Set(prefs.windowDirections || []);
+    if (prefWDirs.size > 0) {
+      const intersection = [...prefWDirs].filter(dir => apartment.windowDirections.has(dir));
+      if (intersection.length === 0) { // If none of the preferred directions are present
+        deduction += prefs.windowDirectionsWorth || 0;
       }
     }
 
-    if (preferences.hasDishwasher && !apartment.hasDishwasher) {
-      deduction += preferences.dishwasherWorth || 0;
+    // Total Window Size
+    checkRange(apartment.totalWindowSize, prefs.totalWindowSize, prefs.totalWindowSizeWorth);
+
+    // Number of Bedrooms
+    checkRange(apartment.numBedrooms, prefs.numBedrooms, prefs.numBedroomsWorth);
+
+    // Number of Bathrooms
+    checkRange(apartment.numBathrooms, prefs.numBathrooms, prefs.numBathroomsWorth);
+
+    // Boolean amenities
+    if (prefs.hasDishwasher && !apartment.hasDishwasher) {
+      deduction += prefs.dishwasherWorth || 0;
     }
-    if (preferences.hasWasher && !apartment.hasWasher) {
-      deduction += preferences.washerWorth || 0;
+    if (prefs.hasWasher && !apartment.hasWasher) {
+      deduction += prefs.washerWorth || 0;
     }
-    if (preferences.hasDryer && !apartment.hasDryer) {
-      deduction += preferences.dryerWorth || 0;
+    if (prefs.hasDryer && !apartment.hasDryer) {
+      deduction += prefs.dryerWorth || 0;
     }
 
-    return deduction;
+    return baseBid - deduction;
   }
 
   async runMatching(people: Person[], apartments: Apartment[]): Promise<MatchingResult[]> {
-    // In debugging mode, 'people' is actually an array of PersonCleartext objects
-    // that have been cast to Person for compatibility with existing types.
-    // We need to map them to DecodedPerson by parsing their 'encryptedData' field as preferences.
-    const decodedPeople: DecodedPerson[] = people.map(person => this.decryptPersonData(person));
+    const decodedPeople: DecodedPerson[] = people.map(person => this.preparePersonForMatching(person));
 
-    const groups = this.formRoommateGroups(decodedPeople);
-    
-    const availableApartments = apartments.map(apt => ({ ...apt, currentTenants: apt.tenants })); 
-    const results: MatchingResult[] = [];
-    const assignedPeopleIds = new Set<string>();
+    let unassignedPeople = [...decodedPeople];
+    let availableApartments = [...apartments];
 
-    const allBids: ApartmentBid[] = [];
-    
-    availableApartments.forEach(apartment => {
-      groups.forEach(group => {
-        if (group.members.some(member => assignedPeopleIds.has(member.id))) return;
-        if (!this.canShareApartment(group.members, apartment)) return;
-        if (apartment.currentTenants + group.members.length > apartment.numBedrooms) return; 
-        if (group.members.length > group.maxSize) return;
+    const assignmentsLog: any[] = []; // To store detailed assignment info for CSV output
 
-        const effectiveBid = this.calculateEffectiveBid(group, apartment, group.members.length > 1);
+    let iterationCount = 0;
+    while (unassignedPeople.length > 0 && availableApartments.length > 0 && iterationCount < 100) { // Add iteration limit to prevent infinite loops
+      iterationCount++;
+      // console.log(`\n--- Iteration ${iterationCount} ---`);
+      // console.log(`Unassigned people: ${unassignedPeople.length}, Available apartments: ${availableApartments.length}`);
+
+      // 1. Generate potential groups from UNASSIGNED people
+      const potentialGroups = this.generatePotentialGroups(unassignedPeople);
+      if (potentialGroups.length === 0) {
+        // console.log("No more potential groups can be formed.");
+        break;
+      }
+      // console.log(`Generated ${potentialGroups.length} potential groups.`);
+
+      // 2. Determine which apartment to focus on (based on aggregate demand)
+      let bestAptToConsiderThisRound: Apartment | null = null;
+      let highestPotentialWinningBidForApt = -1.0;
+
+      const bidsForApartments = new Map<string, ApartmentBid[]>(); // aptId -> list of bids for this apt
+
+      for (const apt of availableApartments) {
+        const currentAptBids: ApartmentBid[] = [];
         
-        if (effectiveBid > 0) {
-          allBids.push({
-            apartment,
-            bidder: group,
-            effectiveBid,
-            isGroup: group.members.length > 1,
-          });
-        }
-      });
-    });
+        for (const group of potentialGroups) {
+          const groupSize = group.members.length;
 
-    allBids.sort((a, b) => b.effectiveBid - a.effectiveBid);
+          // Check if any member of this group is already assigned
+          if (group.members.some(member => !unassignedPeople.some(p => p.id === member.id))) {
+            continue;
+          }
 
-    while (allBids.length > 0) {
-      const highestBid = allBids.shift(); 
-      if (!highestBid) break;
+          // Capacity Check: Group size vs Apartment bedrooms
+          if (groupSize > apt.numBedrooms) {
+            continue;
+          }
 
-      const { apartment: targetApartment, bidder, effectiveBid } = highestBid;
-      const group = bidder as RoommateGroup;
+          // Mutual agreement on roommates (apartment allows it if group > 1)
+          if (groupSize > 1 && !apt.allowRoommates) {
+            continue;
+          }
 
-      const apartmentInSystem = availableApartments.find(a => a.id === targetApartment.id);
-      if (!apartmentInSystem || apartmentInSystem.currentTenants + group.members.length > apartmentInSystem.numBedrooms) {
-        continue; 
-      }
-      if (group.members.some(member => assignedPeopleIds.has(member.id))) {
-        continue; 
-      }
-       if (group.members.length > group.maxSize) {
-        continue; 
-      }
+          let totalGroupBid = 0.0;
+          const individualAdjustedBids: { [personId: string]: number } = {};
+          let validGroupForThisBid = true;
 
-      const paymentAmount = effectiveBid; 
+          for (const personObj of group.members) {
+            // Person must also generally allow roommates if in a group > 1
+            if (groupSize > 1 && !personObj.allowRoommates) { // Use person.allowRoommates from schema
+              validGroupForThisBid = false;
+              break;
+            }
 
-      const assignedPeopleInfo = group.members.map(member => {
-        let individualPayment: number;
-        if (group.members.length === 1) {
-          individualPayment = paymentAmount;
-        } else {
-          const totalOriginalBid = group.members.reduce((sum, m) => sum + m.preferences.bidAmount, 0);
-          if (totalOriginalBid === 0) { 
-             individualPayment = Math.round(paymentAmount / group.members.length);
-          } else {
-            const memberProportion = member.preferences.bidAmount / totalOriginalBid;
-            individualPayment = Math.round(paymentAmount * memberProportion);
+            const adjBid = this.calculateAdjustedBid(personObj, apt, groupSize);
+            if (adjBid < 0) { // Person values this apartment negatively
+              validGroupForThisBid = false;
+              break;
+            }
+            individualAdjustedBids[personObj.id] = adjBid;
+            totalGroupBid += adjBid;
+          }
+
+          if (validGroupForThisBid && totalGroupBid > 0) {
+            currentAptBids.push({
+              apartment: apt,
+              bidder: group,
+              totalGroupBid: totalGroupBid,
+              individualAdjustedBids: individualAdjustedBids,
+              groupMembersNames: group.members.map(m => m.name)
+            });
           }
         }
-        
-        assignedPeopleIds.add(member.id);
-        return {
-          id: member.id,
-          name: member.name,
-          payment: individualPayment,
-        };
-      });
 
-      apartmentInSystem.currentTenants += group.members.length;
+        if (currentAptBids.length > 0) {
+          currentAptBids.sort((a, b) => b.totalGroupBid - a.totalGroupBid);
+          bidsForApartments.set(apt.id, currentAptBids);
 
-      results.push({
-        apartmentId: apartmentInSystem.id,
-        apartmentName: apartmentInSystem.name,
-        assignedPeople: assignedPeopleInfo,
-        totalPayment: paymentAmount, 
-        tenants: apartmentInSystem.currentTenants,
-        capacity: apartmentInSystem.numBedrooms, 
-      });
-
-      for (let i = allBids.length - 1; i >= 0; i--) {
-        const currentBidGroup = allBids[i].bidder as RoommateGroup;
-        if (currentBidGroup.members.some(m => assignedPeopleIds.has(m.id))) {
-          allBids.splice(i, 1);
+          if (currentAptBids[0].totalGroupBid > highestPotentialWinningBidForApt) {
+            highestPotentialWinningBidForApt = currentAptBids[0].totalGroupBid;
+            bestAptToConsiderThisRound = apt;
+          }
         }
       }
+
+      if (!bestAptToConsiderThisRound) {
+        // console.log("No apartment received any valid bids in this round. Ending.");
+        break;
+      }
+
+      // console.log(`Apartment selected for assignment: ${bestAptToConsiderThisRound.name} (ID: ${bestAptToConsiderThisRound.id}) with potential top bid ${highestPotentialWinningBidForApt}`);
+
+      // 3. Assign the 'bestAptToConsiderThisRound'
+      const winningBidListForChosenApt = bidsForApartments.get(bestAptToConsiderThisRound.id);
+      if (!winningBidListForChosenApt || winningBidListForChosenApt.length === 0) {
+        // This should ideally not happen if bestAptToConsiderThisRound was selected
+        continue;
+      }
+
+      const topBidEvent = winningBidListForChosenApt[0];
+      const winningGroup = topBidEvent.bidder;
+      const winningTotalBid = topBidEvent.totalGroupBid;
+
+      let secondHighestTotalBidForApt = 0.0;
+      if (winningBidListForChosenApt.length > 1) {
+        secondHighestTotalBidForApt = winningBidListForChosenApt[1].totalGroupBid;
+      }
+
+      // 4. Calculate Payments
+      const paymentsForWinningGroup: { [personId: string]: number } = {};
+      if (winningTotalBid > 0) {
+        for (const pObj of winningGroup.members) {
+          const personIndividualAdjustedBid = topBidEvent.individualAdjustedBids[pObj.id];
+          // Payment = (Second Highest Group Bid / Winning Group Bid) * Person's Adjusted Bid
+          const personPayment = secondHighestTotalBidForApt * (personIndividualAdjustedBid / winningTotalBid);
+          paymentsForWinningGroup[pObj.id] = personPayment;
+        }
+      } else {
+        // console.warn(`Warning: Winning bid for ${bestAptToConsiderThisRound.name} is <= 0. Skipping assignment.`);
+        availableApartments = availableApartments.filter(a => a.id !== bestAptToConsiderThisRound!.id);
+        continue;
+      }
+
+      // Log/Store assignment details for CSV output
+      for (const pObj of winningGroup.members) {
+        assignmentsLog.push({
+          apartment_name: bestAptToConsiderThisRound.name,
+          person_id: pObj.id,
+          person_name: pObj.name,
+          expected_payment: paymentsForWinningGroup[pObj.id],
+          adjusted_bid: topBidEvent.individualAdjustedBids[pObj.id],
+          group_winning_bid: winningTotalBid,
+          second_highest_bid_for_apt: secondHighestTotalBidForApt,
+          group_members_in_winning_bid: winningGroup.members.map(m => m.name).join(", ")
+        });
+      }
+      // console.log(`Assigned Apt '${bestAptToConsiderThisRound.name}' to Group: ${winningGroup.members.map(p => p.name).join(', ')}. Winning Bid: ${winningTotalBid.toFixed(2)}. Payment based on 2nd highest bid: ${secondHighestTotalBidForApt.toFixed(2)}`);
+      // for (const paymentInfo of winningGroup.members) {
+      //   console.log(`  - ${paymentInfo.name}: Pays ${paymentsForWinningGroup[paymentInfo.id].toFixed(2)} (their bid was ${topBidEvent.individualAdjustedBids[paymentInfo.id].toFixed(2)})`);
+      // }
+
+      // 5. Update lists: remove assigned people and apartment
+      const idsOfAssignedPeople = new Set(winningGroup.members.map(p => p.id));
+      unassignedPeople = unassignedPeople.filter(p => !idsOfAssignedPeople.has(p.id));
+      availableApartments = availableApartments.filter(a => a.id !== bestAptToConsiderThisRound!.id);
     }
-    return results;
+
+    // Convert assignmentsLog to MatchingResult[] format for the API response
+    const finalMatchingResultsMap = new Map<string, MatchingResult>();
+
+    assignmentsLog.forEach(logEntry => {
+      let result = finalMatchingResultsMap.get(logEntry.apartment_name);
+      if (!result) {
+        const apt = apartments.find(a => a.name === logEntry.apartment_name);
+        if (!apt) {
+          console.warn(`Apartment ${logEntry.apartment_name} not found in original list.`);
+          return;
+        }
+        result = {
+          apartmentId: apt.id,
+          apartmentName: apt.name,
+          assignedPeople: [],
+          totalPayment: logEntry.group_winning_bid,
+          tenants: 0,
+          capacity: apt.numBedrooms,
+        };
+        finalMatchingResultsMap.set(logEntry.apartment_name, result);
+      }
+      result.assignedPeople.push({
+        id: logEntry.person_id,
+        name: logEntry.person_name,
+        payment: logEntry.expected_payment,
+      });
+      result.tenants++;
+      result.totalPayment = logEntry.group_winning_bid; // Ensure total payment is the group winning bid
+    });
+
+    return Array.from(finalMatchingResultsMap.values());
   }
 }
 

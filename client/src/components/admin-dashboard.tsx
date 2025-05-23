@@ -21,7 +21,8 @@ import {
 export function AdminDashboard() {
   const [lastUpdate] = useState(new Date().toLocaleString());
   const { toast } = useToast();
-  const [pythonOutput, setPythonOutput] = useState<string | null>(null);
+  // Removed pythonOutput state as output will now be directly in the table
+  // const [pythonOutput, setPythonOutput] = useState<string | null>(null);
 
   const { data: peopleStatus, isLoading: isLoadingPeople } = useQuery({
     queryKey: ["/api/admin/people-status"],
@@ -36,22 +37,23 @@ export function AdminDashboard() {
   });
 
   const runMatchingMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/admin/run-python-matching"),
+    mutationFn: () => apiRequest("POST", "/api/admin/run-matching"), // Call the TS matching endpoint
     onSuccess: (response) => {
       const data = response as any;
-      setPythonOutput(data.output);
+      // No pythonOutput to set, directly invalidate queries
       toast({
-        title: "Python Script Executed",
-        description: "Matching script ran successfully. Check output below.",
+        title: "Matching Completed",
+        description: `Matching algorithm ran successfully. Assigned ${data.assignedCount} people.`,
       });
-      // Invalidate matching results to show the new data from the Python script's CSV output
+      // Invalidate matching results to show the new data from the TS script's CSV output
       queryClient.invalidateQueries({ queryKey: ["/api/admin/matching-results"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/people-status"] }); // People status might change if assigned
     },
     onError: (error) => {
-      setPythonOutput(`Error: ${error.message}`);
+      // setPythonOutput(`Error: ${error.message}`); // No pythonOutput
       toast({
-        title: "Error Running Script",
-        description: error.message || "Failed to run Python matching script",
+        title: "Error Running Matching",
+        description: error.message || "Failed to run matching algorithm",
         variant: "destructive",
       });
     },
@@ -222,8 +224,8 @@ export function AdminDashboard() {
           </Button>
         </div>
 
-        {/* Python Script Output */}
-        {pythonOutput && (
+        {/* Python Script Output - REMOVED */}
+        {/* {pythonOutput && (
           <Card className="mb-8">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -237,7 +239,7 @@ export function AdminDashboard() {
               </pre>
             </CardContent>
           </Card>
-        )}
+        )} */}
 
         {/* People Status Table */}
         <Card className="mb-8">
@@ -318,9 +320,9 @@ export function AdminDashboard() {
                         {result.assignedPeople.map((person: any) => person.name).join(", ")}
                       </TableCell>
                       <TableCell>
-                        {result.assignedPeople.map((person: any) => `$${person.payment}`).join(" / ")}
+                        {result.assignedPeople.map((person: any) => `$${person.payment.toFixed(2)}`).join(" / ")}
                       </TableCell>
-                      <TableCell className="font-medium">${result.totalPayment}</TableCell>
+                      <TableCell className="font-medium">${result.totalPayment.toFixed(2)}</TableCell>
                       <TableCell>
                         <Badge variant={result.tenants >= result.capacity ? "default" : "outline"}>
                           {result.tenants}/{result.capacity} {result.tenants >= result.capacity ? "Full" : "Available"}
