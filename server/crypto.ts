@@ -42,7 +42,7 @@ export class ECKeyPair {
 
       // Extract raw private key bytes from the loaded PEM using a temporary ECDH instance
       const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      tempEcdh.setPrivateKey(privateKeyPem, 'pem'); // Set from PEM string
+      tempEcdh.setPrivateKey(privateKeyPem); // Removed 'pem' encoding argument
       rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
 
       console.log('EC key pair loaded from files.');
@@ -56,15 +56,16 @@ export class ECKeyPair {
         privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
-      privateKeyPem = keyPairGenerated.privateKey as string;
-      publicKeyPem = keyPairGenerated.publicKey as string;
+      // Directly export the generated KeyObjects to PEM strings
+      privateKeyPem = keyPairGenerated.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
+      publicKeyPem = keyPairGenerated.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
 
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
 
       // Extract raw private key bytes from the newly generated PEM using a temporary ECDH instance
       const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      tempEcdh.setPrivateKey(privateKeyPem, 'pem'); // Set from PEM string
+      tempEcdh.setPrivateKey(privateKeyPem); // Removed 'pem' encoding argument
       rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
 
       // Save new PEM keys to files
