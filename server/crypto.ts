@@ -40,9 +40,12 @@ export class ECKeyPair {
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
 
-      // Extract raw private key bytes from the loaded KeyObject
-      // This is the correct way to get the raw bytes for ECDH.setPrivateKey
-      rawPrivateKeyBuffer = this.privateKey.export({ format: 'der', type: 'sec1' }) as Buffer;
+      // Extract raw private key bytes from the loaded KeyObject using JWK format
+      const jwk = this.privateKey.export({ format: 'jwk' }) as crypto.JsonWebKey;
+      if (!jwk.d) {
+        throw new Error('JWK private exponent "d" not found.');
+      }
+      rawPrivateKeyBuffer = Buffer.from(jwk.d, 'base64url');
 
       console.log('EC key pair loaded from files.');
     } catch (error) {
@@ -62,8 +65,12 @@ export class ECKeyPair {
       this.privateKey = keyPairGenerated.privateKey;
       this.publicKey = keyPairGenerated.publicKey;
 
-      // Extract raw private key bytes from the newly generated KeyObject
-      rawPrivateKeyBuffer = this.privateKey.export({ format: 'der', type: 'sec1' }) as Buffer;
+      // Extract raw private key bytes from the newly generated KeyObject using JWK format
+      const jwk = this.privateKey.export({ format: 'jwk' }) as crypto.JsonWebKey;
+      if (!jwk.d) {
+        throw new Error('JWK private exponent "d" not found after generation.');
+      }
+      rawPrivateKeyBuffer = Buffer.from(jwk.d, 'base64url');
 
       // Save new PEM keys to files
       await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
