@@ -107,17 +107,17 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: "",
-      sqMeters: [50, 100],
+      sqMeters: [20, 200], // Default values will be updated by useEffect
       sqMetersWorth: 0,
-      numWindows: [2, 6],
+      numWindows: [1, 12], // Default values will be updated by useEffect
       numWindowsWorth: 0,
       windowDirections: [],
       windowDirectionsWorth: 0,
-      totalWindowSize: [8, 15],
+      totalWindowSize: [2, 25], // Default values will be updated by useEffect
       totalWindowSizeWorth: 0,
-      numBedrooms: [1, 3],
+      numBedrooms: [1, 5], // Default values will be updated by useEffect
       numBedroomsWorth: 0,
-      numBathrooms: [1, 2],
+      numBathrooms: [1, 4], // Default values will be updated by useEffect
       numBathroomsWorth: 0,
       hasDishwasher: false,
       dishwasherWorth: 0,
