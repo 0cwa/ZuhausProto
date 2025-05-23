@@ -1,5 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { parse } from 'csv-parse'; // Import the csv-parse library
 import { Apartment, Person, PersonCleartext, PersonPreferences } from '@shared/schema';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -16,32 +17,21 @@ export class CSVHandler {
     }
   }
 
+  // Replaced custom parseCSV with csv-parse library
   async parseCSV(content: string): Promise<string[][]> {
-    const lines = content.trim().split('\n');
-    return lines.map(line => {
-      const cells: string[] = [];
-      let current = '';
-      let inQuotes = false;
-      
-      for (let i = 0; i < line.length; i++) {
-        const char = line[i];
-        if (char === '"') {
-          inQuotes = !inQuotes;
-        } else if (char === ',' && !inQuotes) {
-          cells.push(current);
-          current = '';
-        } else {
-          current += char;
-        }
-      }
-      cells.push(current);
-      return cells;
+    const records = await parse(content, {
+      columns: false, // Do not assume first row is headers
+      skip_empty_lines: true,
+      trim: true, // Trim whitespace from each cell
     });
+    return records as string[][];
   }
 
   async stringifyCSV(data: string[][]): Promise<string> {
     return data.map(row => 
       row.map(cell => 
+        // Check if cell contains comma, double quote, or newline
+        // If so, enclose in double quotes and escape internal double quotes
         cell.includes(',') || cell.includes('"') || cell.includes('\n') 
           ? `"${cell.replace(/"/g, '""')}"` 
           : cell
@@ -170,15 +160,15 @@ export class CSVHandler {
     await this.ensureDataDirectory();
     try {
       const content = await fs.readFile(PEOPLE_CLEARTEXT_CSV, 'utf8');
-      const rows = await this.parseCSV(content);
+      const rows = await this.parseCSV(content); // Use the new csv-parse based parser
       const [headers, ...dataRows] = rows;
 
       // Dynamically map headers to indices for robustness
-      const headerMap = new Map(headers.map((h, i) => [h.trim(), i]));
+      const headerMap = new Map(headers.map((h, i) => h.trim(), i)); // Corrected: map key to index
 
       return dataRows.map(row => {
-        let preferencesString = row[headerMap.get('Preferences')!] || '{}';
-        // REMOVED: Manual unescaping logic. parseCSV should handle this.
+        // csv-parse should have already handled unquoting, so direct JSON.parse
+        const preferencesString = row[headerMap.get('Preferences')!] || '{}';
         const preferences: PersonPreferences = JSON.parse(preferencesString);
         return {
           id: row[headerMap.get('ID')!],
