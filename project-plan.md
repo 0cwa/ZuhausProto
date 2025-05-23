@@ -23,14 +23,14 @@ Phase 0: Setup & Core Infrastructure
         [FS] Choose backend framework (e.g., Node.js/Express, Python/Flask).
         [FS] Set up basic project structure (folders for frontend, backend, assets, data).
         [FS] Initialize apartment_data.csv with provided sample data. (WindowDirections are semicolon-separated).
-        [FS] Create an initial people.csv. Headers: ID,Name,EncryptedData,AllowRoommates,AssignedRoom,RequiredPayment. This file is intended for encrypted preference data.
-        [FS] Create an initial peoplec.csv (cleartext preferences). Headers: ID,Name,AllowRoommates,AssignedRoom,RequiredPayment,Preferences (JSON string). For debugging, computations and admin display will use peoplec.csv.
+        [FS] Create an initial people.csv. Headers: ID,Name,EncryptedData,AllowRoommates,AssignedRoom,RequiredPayment. In the current draft/debug version, 'EncryptedData' will store a base64 encoded JSON string of preferences.
+        [FS] Create an initial peoplec.csv (cleartext preferences). Headers: ID,Name,AllowRoommates,AssignedRoom,RequiredPayment,Preferences (JSON string). For the current draft/debug version, computations and admin display will primarily use peoplec.csv for ease of development.
 
     Cryptography Setup:
-        [BE] Generate a persistent Elliptic Curve (EC) key pair (private/public) for the server. Store the private key securely (e.g., in keys/.private_key.pem and keys/.public_key.pem).
-        [BE] Create an endpoint to serve the public EC key (e.g., /api/public-key). (Currently bypassed for debugging).
-        [FE] Implement client-side JavaScript library for EC encryption (e.g., Web Crypto API wrappers). (Currently bypassed, uses base64 encoding for debugging).
-        [BE] Implement server-side EC decryption utility function using the private key. (Currently bypassed, expects base64 encoded JSON for debugging).
+        [BE] Generate a persistent Elliptic Curve (EC) key pair (private/public) for the server. Store the private key securely (e.g., in keys/.private_key.pem and keys/.public_key.pem). (Actual key usage is currently bypassed for debugging).
+        [BE] Create an endpoint to serve the public EC key (e.g., /api/public-key). (Currently bypassed for debugging, client uses a dummy key).
+        [FE] Implement client-side JavaScript library for EC encryption (e.g., Web Crypto API wrappers). (Currently bypassed, client-side "encryption" is base64 encoding of preferences JSON for debugging).
+        [BE] Implement server-side EC decryption utility function using the private key. (Currently bypassed, server-side "decryption" is base64 decoding of preferences JSON for debugging).
 
     Identicon Generation:
         [FS] Choose and integrate an Identicon generation library.
@@ -41,7 +41,7 @@ Phase 0: Setup & Core Infrastructure
 
 
 
-Phase 1: Public-Facing Form Page (/)
+Phase 1: Public-Facing Form Page (/) [Largely Complete]
 
 
     Page Structure & Styling:
@@ -57,7 +57,7 @@ Phase 1: Public-Facing Form Page (/)
         [FE] Implement JavaScript to display "X available apartments match your current apartment specifications."
         [FE] Update this count dynamically as form fields change.
 
-    Form Element Generation & Logic:
+    Form Element Generation & Logic: [Largely Complete]
         [FS] General: For each characteristic, display "X apartments match this specification" next to it.
         [FE] Name Input: Text input for "Name".
         [FE] Sq. Meters Slider: Range slider.
@@ -83,12 +83,12 @@ Phase 1: Public-Facing Form Page (/)
             [FE] Separate "Name" and "Allow roommates".
             [FE] Convert preferences to JSON string.
             [FE] "Encrypt" (base64 encode for debugging) the JSON string.
-            [FE] Send "Name", "Allow roommates", and "encrypted" data.
+            [FE] Send "Name", "Allow roommates", and "encrypted" (base64 encoded) data.
         [BE] In POST /api/submit-preferences:
             [BE] Read peoplec.csv to check for duplicate names. Return 409 if duplicate.
             [BE] If unique, generate ID.
-            [BE] Save to people.csv: ID, Name, Base64(PreferencesJSON), AllowRoommates, etc.
-            [BE] Save to peoplec.csv: ID, Name, AllowRoommates, etc., Preferences (as JSON string).
+            [BE] Save to people.csv: ID, Name, Base64(PreferencesJSON), AllowRoommates, etc. (for eventual encrypted storage).
+            [BE] Save to peoplec.csv: ID, Name, AllowRoommates, etc., Preferences (as cleartext JSON string for current draft/debug computations).
             [BE] Return success/failure message.
         [FE] Display success/error message (handle 409 for duplicates specifically). Clear form on success.
 
@@ -108,20 +108,20 @@ Phase 2: Admin Panel (/adminsecret)
         [FE] Fetch and display this list. Implement refresh.
 
     Decryption Ad-Hoc Logic:
-        [BE] For debugging, "decryption" means parsing the JSON string of preferences from the 'encryptedData' field (which itself was populated from peoplec.csv).
+        [BE] For current draft/debug version: "Decryption" involves reading the cleartext preferences JSON string directly from peoplec.csv (or from the 'encryptedData' field of Person objects if they were populated from peoplec.csv, which now holds the JSON string).
 
     Button 1: "Run Matching + Bids"
         [BE] API Endpoint: POST /api/admin/run-matching.
-        [BE] "Decryption": Load people data (from peoplec.csv for debugging, parse preferences JSON).
-        [BE] Roommate Grouping Logic: Based on preferences.
-        [BE] Bidding & Auction Logic: Based on preferences and apartment data.
+        [BE] Data Loading: Load people data from peoplec.csv, parsing the cleartext preferences JSON for each person.
+        [BE] Roommate Grouping Logic: Based on cleartext preferences.
+        [BE] Bidding & Auction Logic: Based on cleartext preferences and apartment data.
         [BE] Output Generation: Prepare chart data.
         [FE] Display chart data on success.
 
     Button 2: "Assign Rooms"
         [BE] API Endpoint: POST /api/admin/assign-rooms.
         [BE] Update apartment_data.csv: Tenants, AllowRoommates.
-        [BE] Update peoplec.csv: AssignedRoom, RequiredPayment.
+        [BE] Update peoplec.csv: AssignedRoom, RequiredPayment (primary source for admin display and re-matching in debug mode).
         [BE] Update people.csv: (for consistency, though not primary source for matching in debug mode) AssignedRoom, RequiredPayment.
         [BE] Return success message.
         [FE] Display success message and refresh data.
@@ -133,7 +133,7 @@ Phase 2: Admin Panel (/adminsecret)
         [FE] Refresh UI.
 
     Persistent Display of Assignments:
-        [BE] Create GET /api/admin/current-assignments (or use existing matching results logic).
+        [BE] Create GET /api/admin/current-assignments (or use existing matching results logic, which operates on data derived from peoplec.csv).
         [FE] Fetch and display on admin panel load.
 
 
@@ -158,7 +158,9 @@ Phase 3: Refinements, Testing & Deployment
         [FS] README, code comments.
 
     Future: Re-enable Full Encryption
-        [FS] Transition from peoplec.csv back to using people.csv with actual encryption/decryption.
-        [BE] Re-enable /api/public-key.
-        [FE] Use real client-side encryption.
-        [BE] Use real server-side decryption.
+        [FS] Transition from peoplec.csv and base64 encoded 'encryptedData' back to using people.csv with actual cryptographic encryption/decryption.
+        [BE] Re-enable actual key generation and usage in server/crypto.ts.
+        [BE] Re-enable /api/public-key to serve the real public key.
+        [FE] Update client/src/lib/crypto.ts to perform real client-side encryption using the server's public key.
+        [BE] Update server-side logic to perform real decryption using the server's private key.
+        [BE] Ensure matching algorithm and admin panel operate on decrypted data in memory, without persistently storing cleartext preferences (unless explicitly decided for specific, non-sensitive analytics).
