@@ -28,22 +28,35 @@ export class CSVHandler {
   async parseCSV(content: string): Promise<string[][]> {
     console.log(`[CSVHandler] parseCSV received content length: ${content.length}`);
     if (content.length === 0) {
-      console.warn("[CSVHandler] parseCSV received empty content.");
+      console.warn("[CSVHandler] parseCSV received empty content. Returning empty array.");
       return [];
     }
 
-    const records = await parse(content, {
-      columns: false, // Do not assume first row is headers
-      skip_empty_lines: true,
-      trim: true, // Trim whitespace from each cell
-      delimiter: ',', // Explicitly set delimiter to comma
-      relax_column_count: true, // Allow rows to have a different number of columns
-      skip_records_with_error: true, // Skip records that cause parsing errors
-      on_record_error: (err) => {
-        console.error(`[CSVHandler] CSV parsing record error: ${err.message}`);
-        return null; // Return null to skip the record
-      },
-    });
+    let records: string[][] | undefined;
+    try {
+      records = await parse(content, {
+        columns: false, // Do not assume first row is headers
+        skip_empty_lines: true,
+        trim: true, // Trim whitespace from each cell
+        delimiter: ',', // Explicitly set delimiter to comma
+        relax_column_count: true, // Allow rows to have a different number of columns
+        skip_records_with_error: true, // Skip records that cause parsing errors
+        cast: false, // Do not cast values, keep them as strings
+        on_record_error: (err) => {
+          console.error(`[CSVHandler] CSV parsing record error: ${err.message}`);
+          return null; // Return null to skip the record
+        },
+      });
+    } catch (parseError) {
+      console.error(`[CSVHandler] Critical CSV parsing error:`, parseError);
+      return []; // Return empty array on critical parsing error
+    }
+
+    if (!Array.isArray(records)) {
+      console.warn(`[CSVHandler] parseCSV returned non-array records (type: ${typeof records}). Returning empty array.`);
+      return [];
+    }
+    
     console.log(`[CSVHandler] parseCSV returned ${records.length} records.`);
     return records as string[][];
   }
