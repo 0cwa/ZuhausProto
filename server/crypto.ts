@@ -41,9 +41,6 @@ export class ECKeyPair {
       this.publicKey = crypto.createPublicKey(publicKeyPem);
 
       // When loading, also get the raw private key bytes
-      // For PKCS8, the raw private key is typically embedded.
-      // We need to parse it to get the raw bytes for ECDH.
-      // A common way is to create a temporary ECDH object and set the private key.
       const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
       tempEcdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
       rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
@@ -52,30 +49,29 @@ export class ECKeyPair {
     } catch (error) {
       // If files don't exist or are unreadable, generate new keys
       console.warn('EC key pair files not found or unreadable. Generating new keys...');
-      const keyPair = crypto.generateKeyPairSync('ec', {
+      
+      // Generate key pair. publicKey and privateKey will be PEM strings due to encoding options.
+      const keyPairGenerated = crypto.generateKeyPairSync('ec', {
         namedCurve: EC_ALGORITHM_DETAILS.name,
         publicKeyEncoding: EC_ALGORITHM_DETAILS.publicKeyEncoding,
         privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
-      // Directly export the generated KeyObjects to PEM strings
-      privateKeyPem = keyPair.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
-      publicKeyPem = keyPair.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
+      // keyPairGenerated.privateKey and keyPairGenerated.publicKey are already PEM strings
+      privateKeyPem = keyPairGenerated.privateKey as string;
+      publicKeyPem = keyPairGenerated.publicKey as string;
 
-      // Assign the KeyObject instances from the keyPair directly
-      this.privateKey = keyPair.privateKey;
-      this.publicKey = keyPair.publicKey;
+      // Create KeyObjects from the PEM strings for internal use by the class
+      this.privateKey = crypto.createPrivateKey(privateKeyPem);
+      this.publicKey = crypto.createPublicKey(publicKeyPem);
 
-      // Get raw private key bytes directly from the generated keyPair
-      // For ECDH, the raw private key is what computeSecret expects.
-      // The 'sec1' DER export of a private key often contains the raw bytes.
-      // Let's use a temporary ECDH object to extract the raw bytes reliably.
+      // Get raw private key bytes from the KeyObject for ECDH
       const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      tempEcdh.setPrivateKey(keyPair.privateKey.export({ format: 'der', type: 'sec1' }));
+      // Now this.privateKey is a KeyObject, so .export() is valid
+      tempEcdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
       rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
 
-
-      // Save new keys to files
+      // Save new PEM keys to files
       await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
       await fs.writeFile(PUBLIC_KEY_PATH, publicKeyPem, 'utf8');
       console.log('New EC key pair generated and saved to files.');
@@ -123,8 +119,6 @@ export class ECKeyPair {
       const sharedSecret = ecdh.computeSecret(ephemeralPublicKeyBuffer);
 
       // 3. Derive AES key from shared secret (e.g., using HKDF or a simple hash)
-      // For simplicity, we'll use a direct hash of the shared secret.
-      // In a real application, use HKDF for key derivation.
       const aesKey = crypto.createHash('sha256').update(sharedSecret).digest();
 
       // 4. Decrypt the actual data using the derived AES key and IV
