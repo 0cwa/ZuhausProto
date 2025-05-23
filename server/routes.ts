@@ -30,6 +30,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hash: publicKeyHash,
       });
     } catch (error) {
+      console.error("Error in /api/public-key:", error); // Log the actual error
       res.status(500).json({ message: "Failed to get public key" });
     }
   });

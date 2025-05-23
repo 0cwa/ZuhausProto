@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 
-const RSA_ALGORITHM = {
+const RSA_ALGORITHM_DETAILS = { // Renamed for clarity
   name: 'rsa-oaep',
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' } as const,
@@ -11,15 +11,15 @@ const RSA_ALGORITHM = {
 const AES_ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV for AES-GCM
 
-export class ECKeyPair {
+export class RSAKeyPair { // Renamed class from ECKeyPair to RSAKeyPair
   private privateKey: crypto.KeyObject;
   public publicKey: crypto.KeyObject;
 
   constructor() {
     const keyPair = crypto.generateKeyPairSync('rsa', {
-      modulusLength: RSA_ALGORITHM.modulusLength,
-      publicKeyEncoding: RSA_ALGORITHM.publicKeyEncoding,
-      privateKeyEncoding: RSA_ALGORITHM.privateKeyEncoding,
+      modulusLength: RSA_ALGORITHM_DETAILS.modulusLength,
+      publicKeyEncoding: RSA_ALGORITHM_DETAILS.publicKeyEncoding,
+      privateKeyEncoding: RSA_ALGORITHM_DETAILS.privateKeyEncoding,
     });
 
     this.privateKey = keyPair.privateKey;
@@ -54,7 +54,7 @@ export class ECKeyPair {
         {
           key: this.privateKey,
           padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-          oaepHash: RSA_ALGORITHM.oaepHash,
+          oaepHash: RSA_ALGORITHM_DETAILS.oaepHash, // Use renamed constant
         },
         encryptedAesKeyBuffer
       );
@@ -88,4 +88,4 @@ export class ECKeyPair {
 }
 
 // Global instance
-export const serverKeyPair = new ECKeyPair();
+export const serverKeyPair = new RSAKeyPair(); // Use renamed class
