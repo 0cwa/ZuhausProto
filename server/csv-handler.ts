@@ -30,6 +30,9 @@ export class CSVHandler {
       columns: false, // Do not assume first row is headers
       skip_empty_lines: true,
       trim: true, // Trim whitespace from each cell
+      // Revert delimiter to default (comma) as columns are comma-separated
+      // The semicolon is *within* a cell, not a column delimiter.
+      // csv-parse should handle unquoted semicolons within a field if the primary delimiter is a comma.
     });
     return records as string[][];
   }
@@ -37,12 +40,12 @@ export class CSVHandler {
   async stringifyCSV(data: string[][]): Promise<string> {
     return data.map(row => 
       row.map(cell => 
-        // Check if cell contains comma, double quote, or newline
+        // Check if cell contains comma, double quote, newline, or semicolon
         // If so, enclose in double quotes and escape internal double quotes
-        cell.includes(',') || cell.includes('"') || cell.includes('\n') 
+        cell.includes(',') || cell.includes('"') || cell.includes('\n') || cell.includes(';')
           ? `"${cell.replace(/"/g, '""')}"` 
           : cell
-      ).join(',')
+      ).join(',') // Join with comma, as it's the column delimiter
     ).join('\n');
   }
 
