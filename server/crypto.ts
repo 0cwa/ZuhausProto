@@ -27,10 +27,13 @@ export class ECKeyPair {
   async init(): Promise<void> {
     await fs.mkdir(KEYS_DIR, { recursive: true });
 
+    let privateKeyPem: string;
+    let publicKeyPem: string;
+
     try {
       // Try to load existing keys
-      const privateKeyPem = await fs.readFile(PRIVATE_KEY_PATH, 'utf8');
-      const publicKeyPem = await fs.readFile(PUBLIC_KEY_PATH, 'utf8');
+      privateKeyPem = await fs.readFile(PRIVATE_KEY_PATH, 'utf8');
+      publicKeyPem = await fs.readFile(PUBLIC_KEY_PATH, 'utf8');
       
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
@@ -44,21 +47,18 @@ export class ECKeyPair {
         privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
-      // Assign directly from keyPair result
-      this.privateKey = keyPair.privateKey;
-      this.publicKey = keyPair.publicKey;
+      // Export the keys to PEM format immediately after generation
+      privateKeyPem = keyPair.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
+      publicKeyPem = keyPair.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
 
-      // Ensure keys are not null before exporting
-      if (this.privateKey && this.publicKey) {
-        // Save new keys to files
-        // Explicitly call export on the KeyObject instances
-        await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
-        await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
-        console.log('New EC key pair generated and saved to files.');
-      } else {
-        console.error('Failed to generate EC key pair: privateKey or publicKey is null.');
-        throw new Error('Failed to generate EC key pair.');
-      }
+      // Re-import them to ensure they are valid KeyObjects for this instance
+      this.privateKey = crypto.createPrivateKey(privateKeyPem);
+      this.publicKey = crypto.createPublicKey(publicKeyPem);
+
+      // Save new keys to files
+      await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
+      await fs.writeFile(PUBLIC_KEY_PATH, publicKeyPem, 'utf8');
+      console.log('New EC key pair generated and saved to files.');
     }
   }
 
@@ -97,7 +97,6 @@ export class ECKeyPair {
       // 1. Create ECDH instance with server's private key
       const ecdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
       // Set the server's private key for key derivation
-      // The export format 'sec1' is specific to EC private keys and is often expected by setPrivateKey.
       ecdh.setPrivateKey(this.privateKey.export({ format: 'der', type: 'sec1' }));
 
       // 2. Derive shared secret using client's ephemeral public key
