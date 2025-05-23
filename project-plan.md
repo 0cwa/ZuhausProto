@@ -22,7 +22,7 @@ Phase 0: Setup & Core Infrastructure
         [FS] Set up project repository (e.g., Git).
         [FS] Choose backend framework (e.g., Node.js/Express, Python/Flask).
         [FS] Set up basic project structure (folders for frontend, backend, assets, data).
-        [FS] Initialize apartment_data.csv with provided sample data. (WindowDirections are comma-separated).
+        [FS] Initialize apartment_data.csv with provided sample data. (WindowDirections are semicolon-separated).
         [FS] Create an initial people.csv. Headers can be: Name,EncryptedData,AllowRoommates,AssignedRoom,RequiredPayment. The system will generate IDs internally and include an 'ID' column when saving this file.
 
     Cryptography Setup:
@@ -69,7 +69,7 @@ Phase 1: Public-Facing Form Page (/)
             [BE] Backend logic for min/max from apartment_data.csv.
             [FE] Display current slider value.
         [FE] Window Directions Checkboxes:
-            [BE] Backend logic to get all unique directions from apartment_data.csv (e.g., "N", "S", "E", "W", "NE", etc. Values are comma-separated in the CSV).
+            [BE] Backend logic to get all unique directions from apartment_data.csv (e.g., "N", "S", "E", "W", "NE", etc. Values are semicolon-separated in the CSV).
             [FE] Generate checkboxes dynamically based on unique directions.
             [FE] Implement "at least 75% of selected directions must be present in the apartment's window directions" logic for filtering preview counts.
         [FE] Total Window Size Slider:

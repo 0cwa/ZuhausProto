@@ -59,7 +59,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (req.query.windowDirections) {
-        const selectedDirections = (req.query.windowDirections as string).split(',');
+        const selectedDirections = (req.query.windowDirections as string).split(','); // Client sends comma-separated
         if (selectedDirections.length > 0) {
             const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
             filteredApartments = filteredApartments.filter(apt => {
