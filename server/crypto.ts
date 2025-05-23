@@ -40,10 +40,9 @@ export class ECKeyPair {
       this.privateKey = crypto.createPrivateKey(privateKeyPem);
       this.publicKey = crypto.createPublicKey(publicKeyPem);
 
-      // Extract raw private key bytes from the loaded PEM using a temporary ECDH instance
-      const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      tempEcdh.setPrivateKey(privateKeyPem); // Removed 'pem' encoding argument
-      rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
+      // Extract raw private key bytes from the loaded KeyObject
+      // This is the correct way to get the raw bytes for ECDH.setPrivateKey
+      rawPrivateKeyBuffer = this.privateKey.export({ format: 'der', type: 'sec1' }) as Buffer;
 
       console.log('EC key pair loaded from files.');
     } catch (error) {
@@ -60,13 +59,11 @@ export class ECKeyPair {
       privateKeyPem = keyPairGenerated.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
       publicKeyPem = keyPairGenerated.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
 
-      this.privateKey = crypto.createPrivateKey(privateKeyPem);
-      this.publicKey = crypto.createPublicKey(publicKeyPem);
+      this.privateKey = keyPairGenerated.privateKey;
+      this.publicKey = keyPairGenerated.publicKey;
 
-      // Extract raw private key bytes from the newly generated PEM using a temporary ECDH instance
-      const tempEcdh = crypto.createECDH(EC_ALGORITHM_DETAILS.name);
-      tempEcdh.setPrivateKey(privateKeyPem); // Removed 'pem' encoding argument
-      rawPrivateKeyBuffer = tempEcdh.getPrivateKey();
+      // Extract raw private key bytes from the newly generated KeyObject
+      rawPrivateKeyBuffer = this.privateKey.export({ format: 'der', type: 'sec1' }) as Buffer;
 
       // Save new PEM keys to files
       await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
