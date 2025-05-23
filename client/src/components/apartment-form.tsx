@@ -14,6 +14,7 @@ import { RoommateSection } from "./roommate-section";
 import { encryptData } from "@/lib/crypto";
 import { apiRequest } from "@/lib/queryClient";
 import { Loader2, Send, User, Home, Users, DollarSign } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 // Min/max for sleep time slider (linear minutes, 7 PM to 5 AM next day)
 const SLEEP_TIME_SLIDER_MIN = 19 * 60; // 7 PM
@@ -25,7 +26,7 @@ const WAKE_TIME_SLIDER_MAX = 13 * 60; // 1 PM
 
 const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
-  sqMeters: z.tuple([z.number().min(20).max(150), z.number().min(20).max(150)])
+  sqMeters: z.tuple([z.number().min(20).max(200), z.number().min(20).max(200)]) // Changed max to 200
     .refine(data => data[0] <= data[1], { message: "Min sq meters must be less than or equal to max" }),
   sqMetersWorth: z.number().min(0).optional(),
   numWindows: z.tuple([z.number().min(1).max(12), z.number().min(1).max(12)])
@@ -98,6 +99,10 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     hasDryer: null,
   });
 
+  const { data: minMaxData, isLoading: isLoadingMinMax } = useQuery({
+    queryKey: ["/api/apartments/min-max"],
+  });
+
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -131,6 +136,21 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
       wakeTime: [6 * 60, 8 * 60], // 6 AM - 8 AM
     },
   });
+
+  // Update form default values once minMaxData is loaded
+  useEffect(() => {
+    if (minMaxData) {
+      form.reset({
+        ...form.getValues(), // Keep existing values if user has interacted
+        sqMeters: [minMaxData.sqMeters.min, minMaxData.sqMeters.max],
+        numWindows: [minMaxData.numWindows.min, minMaxData.numWindows.max],
+        totalWindowSize: [minMaxData.totalWindowSize.min, minMaxData.totalWindowSize.max],
+        numBedrooms: [minMaxData.numBedrooms.min, minMaxData.numBedrooms.max],
+        numBathrooms: [minMaxData.numBathrooms.min, minMaxData.numBathrooms.max],
+      });
+    }
+  }, [minMaxData, form.reset]);
+
 
   const watchedValues = form.watch();
 
@@ -348,15 +368,15 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                 <Slider
                   value={watchedValues.sqMeters}
                   onValueChange={(value) => form.setValue("sqMeters", value as [number, number])}
-                  min={20}
-                  max={150}
+                  min={minMaxData?.sqMeters.min ?? 20}
+                  max={minMaxData?.sqMeters.max ?? 200} // Changed max to 200
                   step={5}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-slate-500">
-                  <span>20m²</span>
+                  <span>{minMaxData?.sqMeters.min ?? 20}m²</span>
                   <span className="font-medium text-slate-700">{watchedValues.sqMeters[0]}m² - {watchedValues.sqMeters[1]}m²</span>
-                  <span>150m²</span>
+                  <span>{minMaxData?.sqMeters.max ?? 200}m²</span> {/* Changed max to 200 */}
                 </div>
                  {form.formState.errors.sqMeters && (
                   <p className="text-sm text-red-600">{(form.formState.errors.sqMeters as any).message || form.formState.errors.sqMeters?.[0]?.message || form.formState.errors.sqMeters?.[1]?.message}</p>
@@ -390,15 +410,15 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                 <Slider
                   value={watchedValues.numWindows}
                   onValueChange={(value) => form.setValue("numWindows", value as [number, number])}
-                  min={1}
-                  max={12}
+                  min={minMaxData?.numWindows.min ?? 1}
+                  max={minMaxData?.numWindows.max ?? 12}
                   step={1}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-slate-500">
-                  <span>1</span>
+                  <span>{minMaxData?.numWindows.min ?? 1}</span>
                   <span className="font-medium text-slate-700">{watchedValues.numWindows[0]} - {watchedValues.numWindows[1]} windows</span>
-                  <span>12</span>
+                  <span>{minMaxData?.numWindows.max ?? 12}</span>
                 </div>
                 {form.formState.errors.numWindows && (
                   <p className="text-sm text-red-600">{(form.formState.errors.numWindows as any).message || form.formState.errors.numWindows?.[0]?.message || form.formState.errors.numWindows?.[1]?.message}</p>
@@ -474,15 +494,15 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                 <Slider
                   value={watchedValues.totalWindowSize}
                   onValueChange={(value) => form.setValue("totalWindowSize", value as [number, number])}
-                  min={2}
-                  max={25}
+                  min={minMaxData?.totalWindowSize.min ?? 2}
+                  max={minMaxData?.totalWindowSize.max ?? 25}
                   step={1}
                   className="w-full"
                 />
                 <div className="flex justify-between text-xs text-slate-500">
-                  <span>2m²</span>
+                  <span>{minMaxData?.totalWindowSize.min ?? 2}m²</span>
                   <span className="font-medium text-slate-700">{watchedValues.totalWindowSize[0]}m² - {watchedValues.totalWindowSize[1]}m²</span>
-                  <span>25m²</span>
+                  <span>{minMaxData?.totalWindowSize.max ?? 25}m²</span>
                 </div>
                 {form.formState.errors.totalWindowSize && (
                   <p className="text-sm text-red-600">{(form.formState.errors.totalWindowSize as any).message || form.formState.errors.totalWindowSize?.[0]?.message || form.formState.errors.totalWindowSize?.[1]?.message}</p>
@@ -518,15 +538,15 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                         <Slider
                             value={watchedValues.numBedrooms}
                             onValueChange={(value) => form.setValue("numBedrooms", value as [number, number])}
-                            min={1}
-                            max={5}
+                            min={minMaxData?.numBedrooms.min ?? 1}
+                            max={minMaxData?.numBedrooms.max ?? 5}
                             step={1}
                             className="w-full"
                         />
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>1</span>
+                            <span>{minMaxData?.numBedrooms.min ?? 1}</span>
                             <span className="font-medium text-slate-700">{watchedValues.numBedrooms[0]} - {watchedValues.numBedrooms[1]}</span>
-                            <span>5</span>
+                            <span>{minMaxData?.numBedrooms.max ?? 5}</span>
                         </div>
                         {form.formState.errors.numBedrooms && (
                           <p className="text-sm text-red-600">{(form.formState.errors.numBedrooms as any).message || form.formState.errors.numBedrooms?.[0]?.message || form.formState.errors.numBedrooms?.[1]?.message}</p>
@@ -560,15 +580,15 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
                         <Slider
                             value={watchedValues.numBathrooms}
                             onValueChange={(value) => form.setValue("numBathrooms", value as [number, number])}
-                            min={1}
-                            max={4}
+                            min={minMaxData?.numBathrooms.min ?? 1}
+                            max={minMaxData?.numBathrooms.max ?? 4}
                             step={0.5} 
                             className="w-full"
                         />
                         <div className="flex justify-between text-xs text-slate-500">
-                            <span>1</span>
+                            <span>{minMaxData?.numBathrooms.min ?? 1}</span>
                             <span className="font-medium text-slate-700">{watchedValues.numBathrooms[0]} - {watchedValues.numBathrooms[1]}</span>
-                            <span>4</span>
+                            <span>{minMaxData?.numBathrooms.max ?? 4}</span>
                         </div>
                         {form.formState.errors.numBathrooms && (
                           <p className="text-sm text-red-600">{(form.formState.errors.numBathrooms as any).message || form.formState.errors.numBathrooms?.[0]?.message || form.formState.errors.numBathrooms?.[1]?.message}</p>
@@ -692,7 +712,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             <div className="text-center sm:text-left">
               <h3 className="text-lg font-semibold mb-1 sm:mb-2">Ready to Submit Your Preferences?</h3>
               <p className="text-blue-100 text-sm">
-                Your detailed preferences will be encrypted before submission to protect your privacy.
+                Your detailed preferences will be encrypted client-side before submission to protect your privacy.
               </p>
             </div>
             <Button 
