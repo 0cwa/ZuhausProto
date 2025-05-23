@@ -25,10 +25,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize data from CSV files
   try {
     const apartments = await csvHandler.loadApartments();
-    const peopleFromPeopleCSV = await csvHandler.loadPeople(); // Load from people.csv
+    // FIX: Load people from peoplec.csv (cleartext) for storage in debug mode
+    const peopleFromPeopleCSV = await csvHandler.loadPeopleCleartext(); 
     
     storage.setApartments(apartments);
-    // Set people in storage from people.csv data
+    // Set people in storage from peoplec.csv data
     // The 'preferences' field will now contain the parsed JSON preferences
     storage.setPeople(peopleFromPeopleCSV);
 
@@ -251,25 +252,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid count provided." });
       }
 
+      // Get current people from storage (which was loaded from peoplec.csv)
       const currentPeople = await storage.getPeople();
+      // Also load cleartext people directly for saving back to peoplec.csv
       const currentPeopleCleartext = await csvHandler.loadPeopleCleartext();
-      // Removed manual nextId tracking and setNextPersonId call here.
-      // Rely on storage.createPerson to manage IDs.
 
       for (let i = 0; i < count; i++) {
-        // storage.createPerson will generate and increment its internal ID
         const preferences = generateRandomPreferences();
-        const allowRoommates = preferences.maxRoommates !== 0; // Derive from maxRoommates
+        const allowRoommates = preferences.maxRoommates !== 0; 
 
-        const newPerson = await storage.createPerson({ // Let storage generate the ID
-          name: `Dummy Person ${storage.getNextPersonId()}`, // Use getNextPersonId for name, it will be incremented by createPerson
+        // Use storage.createPerson to generate a new ID and add to in-memory storage
+        const newPerson = await storage.createPerson({ 
+          name: `Dummy Person ${storage.getNextPersonId()}`, 
           preferences: preferences,
           allowRoommates: allowRoommates,
           assignedRoom: undefined,
           requiredPayment: undefined,
         });
         
-        // Add the newly created person (with its generated ID) to the cleartext list
+        // Add the newly created person (with its generated ID) to the cleartext list for saving
         currentPeopleCleartext.push({
           id: newPerson.id,
           name: newPerson.name,
@@ -279,10 +280,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           preferences: newPerson.preferences,
         });
       }
-      // No need to call storage.setNextPersonId here, createPerson handles it.
 
       // Save the updated lists back to CSVs
-      await csvHandler.savePeople(await storage.getPeople()); // Get the latest from storage after additions
+      // Save to people.csv (which holds base64 encoded preferences)
+      await csvHandler.savePeople(await storage.getPeople()); 
+      // Save to peoplec.csv (which holds cleartext preferences)
       await csvHandler.savePeopleCleartext(currentPeopleCleartext);
 
       res.json({ message: `Successfully added ${count} dummy people.` });
@@ -295,7 +297,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Run matching algorithm (now using TypeScript matching engine)
   app.post("/api/admin/run-matching", async (req, res) => {
     try {
-      // Get people from storage (sourced from people.csv, now with preferences directly)
+      // Get people from storage (sourced from peoplec.csv, now with preferences directly)
       const peopleForMatching = await storage.getPeople();
       const apartments = await storage.getApartments();
       
