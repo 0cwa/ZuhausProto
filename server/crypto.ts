@@ -47,13 +47,14 @@ export class ECKeyPair {
         privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding,
       });
 
-      // Export the keys to PEM format immediately after generation
+      // Directly export the generated KeyObjects to PEM strings
+      // This is the most direct way to get the PEM content from the generated keys.
       privateKeyPem = keyPair.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
       publicKeyPem = keyPair.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
 
-      // Re-import them to ensure they are valid KeyObjects for this instance
-      this.privateKey = crypto.createPrivateKey(privateKeyPem);
-      this.publicKey = crypto.createPublicKey(publicKeyPem);
+      // Assign the KeyObject instances from the keyPair directly
+      this.privateKey = keyPair.privateKey;
+      this.publicKey = keyPair.publicKey;
 
       // Save new keys to files
       await fs.writeFile(PRIVATE_KEY_PATH, privateKeyPem, 'utf8');
