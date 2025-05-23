@@ -220,15 +220,40 @@ export class CSVHandler {
         }
       }).filter(person => person !== null) as PersonCleartext[]; // Filter out nulls
     } catch (error) {
+      // If the file does not exist, return an empty array instead of throwing an error
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        console.warn(`[CSVHandler] peoplec.csv not found at ${PEOPLE_CLEARTEXT_CSV}. Returning empty array.`);
+        return [];
+      }
       console.error('[CSVHandler] Error loading or processing peoplec.csv:', error);
       return [];
     }
   }
 
-  async savePeopleCleartext(people: PersonCleartext[]): Promise<void> {
+  async savePeopleCleartext(peopleToSave: PersonCleartext[]): Promise<void> {
     await this.ensureDataDirectory();
     const headers = ['ID', 'Name', 'AllowRoommates', 'AssignedRoom', 'RequiredPayment', 'Preferences'];
-    const rows = people.map(person => [
+    
+    // Read existing people data first
+    let existingPeople: PersonCleartext[] = [];
+    try {
+      existingPeople = await this.loadPeopleCleartext();
+    } catch (error) {
+      // If loadPeopleCleartext throws an error (e.g., file not found), it will return [],
+      // so this catch block might not be strictly necessary if loadPeopleCleartext handles ENOENT.
+      // However, it's good practice to be explicit.
+      console.error("Error loading existing people cleartext data for saving:", error);
+      // If there's an error loading, we proceed with just the new data to avoid data loss.
+      // Or, depending on desired behavior, you might re-throw or handle differently.
+    }
+
+    // Combine existing people with the new people data.
+    // Assuming 'peopleToSave' contains the new person(s) to be added.
+    // If 'peopleToSave' is intended to be the *entire* new state, then this merge logic needs adjustment.
+    // For appending, we want to add the new items to the existing list.
+    const allPeople = [...existingPeople, ...peopleToSave];
+
+    const rows = allPeople.map(person => [
       person.id,
       person.name,
       person.allowRoommates.toString(),
@@ -236,7 +261,13 @@ export class CSVHandler {
       person.requiredPayment?.toString() || '',
       JSON.stringify(person.preferences), // Store preferences as JSON string
     ]);
-    const csvContent = await this.stringifyCSV([headers, ...rows]);
+    
+    // Always include headers when writing the full file
+    const dataToWrite = [headers, ...rows];
+
+    const csvContent = await this.stringifyCSV(dataToWrite);
+    // Use 'w' flag to overwrite the file with the complete, updated content
+    // This ensures the file is always consistent and includes all records.
     await fs.writeFile(PEOPLE_CLEARTEXT_CSV, csvContent, 'utf8');
   }
 }
