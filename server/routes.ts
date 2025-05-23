@@ -15,27 +15,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Initialize data from CSV files
   try {
     const apartments = await csvHandler.loadApartments();
-    // Load people from cleartext CSV for debugging
-    const peopleCleartext = await csvHandler.loadPeopleCleartext(); 
+    const peopleFromPeopleCSV = await csvHandler.loadPeople(); // Load from people.csv
     
     storage.setApartments(apartments);
-    // Set people in storage from cleartext data
-    const peopleForStorage = peopleCleartext.map(p => ({
-      id: p.id,
-      name: p.name,
-      allowRoommates: p.allowRoommates,
-      assignedRoom: p.assignedRoom,
-      requiredPayment: p.requiredPayment,
-      encryptedData: JSON.stringify(p.preferences), // Store preferences as 'encryptedData' for matching engine compatibility
-    }));
-    storage.setPeople(peopleForStorage);
+    // Set people in storage from people.csv data
+    // The 'encryptedData' field will contain the base64 encoded JSON string of preferences
+    storage.setPeople(peopleFromPeopleCSV);
 
   } catch (error) {
     console.error('Error loading CSV data:', error);
   }
-
-  // Removed /api/public-key endpoint as encryption is bypassed for debugging.
-  // Client will use a dummy public key.
 
   // Get apartment count based on filters
   app.get("/api/apartments/count", async (req, res) => {
@@ -58,14 +47,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (req.query.windowDirections) {
-        const selectedDirections = (req.query.windowDirections as string).split(','); // Client sends comma-separated
+        const selectedDirections = (req.query.windowDirections as string).split(','); 
         if (selectedDirections.length > 0) {
-            const requiredMatches = Math.ceil(selectedDirections.length * 0.75);
-            filteredApartments = filteredApartments.filter(apt => {
-                // Check if at least 75% of selectedDirections are present in apt.windowDirections
-                const matchCount = selectedDirections.filter(dir => apt.windowDirections.includes(dir)).length;
-                return matchCount >= requiredMatches;
-            });
+            // OR logic: apartment matches if it has at least one of the selected directions
+            filteredApartments = filteredApartments.filter(apt => 
+              selectedDirections.some(dir => apt.windowDirections.includes(dir))
+            );
         }
       }
       
@@ -166,25 +153,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const data = formSubmissionSchema.parse(req.body);
       
-      // Check if name already exists in cleartext data
-      const existingPeopleCleartext = await csvHandler.loadPeopleCleartext();
-      if (existingPeopleCleartext.some(p => p.name === data.name)) {
+      // Check if name already exists using storage (sourced from people.csv)
+      const existingPerson = await storage.getPersonByName(data.name);
+      if (existingPerson) {
         return res.status(409).json({ message: "Name already exists" });
       }
       
-      // Create new person (encrypted - though now it's just base64 encoded preferences)
+      // Create new person in storage
       const person = await storage.createPerson({
         name: data.name,
-        encryptedData: data.encryptedData, // This is now base64(JSON.stringify(preferences))
+        encryptedData: data.encryptedData, // This is base64(JSON.stringify(preferences))
         allowRoommates: data.allowRoommates,
       });
       
-      // Update encrypted CSV file (people.csv)
-      const people = await storage.getPeople();
-      await csvHandler.savePeople(people);
+      // Update people.csv from storage
+      const allPeopleFromStorage = await storage.getPeople();
+      await csvHandler.savePeople(allPeopleFromStorage);
 
       // DEBUGGING: Save cleartext preferences to peoplec.csv
-      // The 'encryptedData' from the client is now just base64 encoded preferences.
       const preferencesJsonString = Buffer.from(data.encryptedData, 'base64').toString('utf8');
       const newPersonCleartext: PersonCleartext = {
         id: person.id,
@@ -223,8 +209,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get people status for admin
   app.get("/api/admin/people-status", async (req, res) => {
     try {
-      // Load from cleartext CSV for debugging
-      const people = await csvHandler.loadPeopleCleartext(); 
+      // Load from storage (which is sourced from people.csv)
+      const people = await storage.getPeople(); 
       
       const status = people.map(person => ({
         id: person.id,
@@ -233,6 +219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isAssigned: !!person.assignedRoom,
         assignedRoom: person.assignedRoom,
         requiredPayment: person.requiredPayment,
+        // Note: encryptedData is not sent to client for this status endpoint
       }));
       
       res.json(status);
@@ -245,17 +232,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Run matching algorithm
   app.post("/api/admin/run-matching", async (req, res) => {
     try {
-      // DEBUGGING: Load people from cleartext CSV
-      const peopleCleartext = await csvHandler.loadPeopleCleartext();
-      // Convert PersonCleartext to Person for matching engine compatibility
-      const peopleForMatching = peopleCleartext.map(p => ({
-        id: p.id,
-        name: p.name,
-        allowRoommates: p.allowRoommates,
-        assignedRoom: p.assignedRoom,
-        requiredPayment: p.requiredPayment,
-        encryptedData: JSON.stringify(p.preferences), // Store preferences as 'encryptedData' for matching engine to parse
-      }));
+      // Get people from storage (sourced from people.csv)
+      // The 'encryptedData' field contains the base64 encoded JSON string of preferences.
+      // The dummy matchingEngine.decryptPersonData expects this.
+      const peopleForMatching = await storage.getPeople();
 
       const apartments = await storage.getApartments();
       
@@ -268,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const results = await matchingEngine.runMatching(unassignedPeople, apartments);
       
-      // Save matching results
+      // Save matching results to storage (in-memory)
       await storage.saveMatchingResults(results);
       
       res.json({
@@ -291,7 +271,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No matching results found. Run matching first." });
       }
       
-      // Update people with assignments in cleartext CSV
+      // Update people in storage (which will then be saved to people.csv)
+      for (const result of matchingResults) {
+        for (const assignedPerson of result.assignedPeople) {
+          await storage.updatePerson(assignedPerson.id, {
+            assignedRoom: result.apartmentName,
+            requiredPayment: assignedPerson.payment,
+          });
+        }
+      }
+      const updatedPeopleFromStorage = await storage.getPeople();
+      await csvHandler.savePeople(updatedPeopleFromStorage); // Save updated people.csv
+
+      // Also update peoplec.csv for debugging consistency
       const allPeopleCleartext = await csvHandler.loadPeopleCleartext();
       for (const result of matchingResults) {
         for (const assignedPerson of result.assignedPeople) {
@@ -303,19 +295,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       await csvHandler.savePeopleCleartext(allPeopleCleartext);
-
-      // Also update encrypted people.csv for consistency (though not used for matching now)
-      const allPeopleEncrypted = await csvHandler.loadPeople();
-      for (const result of matchingResults) {
-        for (const assignedPerson of result.assignedPeople) {
-          const personIndex = allPeopleEncrypted.findIndex(p => p.id === assignedPerson.id);
-          if (personIndex !== -1) {
-            allPeopleEncrypted[personIndex].assignedRoom = result.apartmentName;
-            allPeopleEncrypted[personIndex].requiredPayment = assignedPerson.payment;
-          }
-        }
-      }
-      await csvHandler.savePeople(allPeopleEncrypted);
       
       // Update apartments with new tenant counts and roommate availability
       for (const result of matchingResults) {
@@ -331,11 +310,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      // Save to CSV files
+      // Save updated apartments to CSV
       const apartments = await storage.getApartments();
       await csvHandler.saveApartments(apartments);
       
-      // Clear matching results
+      // Clear matching results from storage
       await storage.clearMatchingResults();
       
       res.json({
