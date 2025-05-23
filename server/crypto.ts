@@ -6,7 +6,7 @@ const EC_ALGORITHM_DETAILS = {
   name: 'prime256v1', // A common and secure elliptic curve
   // For consistency with openssl generated keys (SEC1 format)
   publicKeyEncoding: { type: 'spki', format: 'pem' } as const,
-  privateKeyEncoding: { type: 'sec1', format: 'pem' } as const, // Changed to 'sec1'
+  privateKeyEncoding: { type: 'sec1', format: 'pem' } as const, 
 };
 
 const AES_ALGORITHM = 'aes-256-gcm';
@@ -15,7 +15,7 @@ const AUTH_TAG_LENGTH = 16; // 128-bit authentication tag for AES-GCM
 
 const KEYS_DIR = path.resolve(process.cwd(), 'keys');
 const PRIVATE_KEY_PATH = path.join(KEYS_DIR, '.private_key.pem');
-const PUBLIC_KEY_PATH = path.join(KEYS_DIR, '.public_key.pem'); // Optional, but good practice
+const PUBLIC_KEY_PATH = path.join(KEYS_DIR, '.public_key.pem'); 
 
 export class ECKeyPair {
   private privateKey: crypto.KeyObject | null = null;
@@ -36,9 +36,9 @@ export class ECKeyPair {
       privateKeyPem = await fs.readFile(PRIVATE_KEY_PATH, 'utf8');
       publicKeyPem = await fs.readFile(PUBLIC_KEY_PATH, 'utf8');
       
-      // Explicitly specify format and type when creating KeyObject from PEM
-      this.privateKey = crypto.createPrivateKey({ key: privateKeyPem, format: 'pem', type: 'sec1' }); // Explicitly 'sec1'
-      this.publicKey = crypto.createPublicKey(publicKeyPem); // Public key is usually SPKI, format 'pem' is fine
+      // Allow Node.js to infer the private key type from the PEM content
+      this.privateKey = crypto.createPrivateKey(privateKeyPem); 
+      this.publicKey = crypto.createPublicKey(publicKeyPem);
 
       console.log('EC key pair loaded from files.');
     } catch (error) {
@@ -47,11 +47,10 @@ export class ECKeyPair {
       
       const keyPairGenerated = crypto.generateKeyPairSync('ec', {
         namedCurve: EC_ALGORITHM_DETAILS.name,
-        publicKeyEncoding: EC_ALGORITHM_DETAILS.publicKeyEncoding,
-        privateKeyEncoding: EC_ALGORITHM_DETAILS.privateKeyEncoding, // Now uses 'sec1'
+        // No direct encoding options here to get KeyObjects directly
       });
 
-      // Directly export the generated KeyObjects to PEM strings
+      // Export the generated KeyObjects to PEM strings using specified encodings
       privateKeyPem = keyPairGenerated.privateKey.export(EC_ALGORITHM_DETAILS.privateKeyEncoding).toString();
       publicKeyPem = keyPairGenerated.publicKey.export(EC_ALGORITHM_DETAILS.publicKeyEncoding).toString();
 
