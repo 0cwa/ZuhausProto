@@ -272,11 +272,10 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
   }, [watchedValues, onApartmentCountChange]);
 
   const onSubmit = async (data: FormData) => {
-    // serverPublicKey is now a dummy, but we keep the check for type consistency
-    if (!serverPublicKey) {
+    if (!serverPublicKey) { // Still useful as a guard, even if key is dummy
       toast({
-        title: "Error",
-        description: "Server public key not available",
+        title: "Configuration Error",
+        description: "Client is not properly configured (missing server key placeholder).",
         variant: "destructive",
       });
       return;
@@ -284,7 +283,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     setIsSubmitting(true);
     try {
       const { name, allowRoommates, ...preferences } = data;
-      // In debugging mode, encryptData just base64 encodes the preferences JSON.
       const encryptedData = await encryptData(JSON.stringify(preferences), serverPublicKey);
       await apiRequest("POST", "/api/submit-preferences", {
         name,
@@ -296,17 +294,33 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         description: "Your preferences have been submitted successfully!",
         variant: "default", 
       });
-      form.reset(form.getValues(), { keepErrors: false, keepDirty: false, keepIsSubmitted: false, keepTouched: false, keepIsValid: false, keepSubmitCount: false });
+      form.reset(); // Reset form to default values
     } catch (error: any) {
-      const errorMessage = error.message || "Failed to submit preferences";
-      let displayMessage = "Failed to submit preferences.";
-      if (errorMessage.includes("409")) { 
-        displayMessage = "Name already exists. Please choose a different name.";
-      } else {
-        displayMessage = errorMessage;
+      let displayMessage = "Failed to submit preferences. Please try again.";
+      // apiRequest throws an error with message like "STATUS: Text"
+      if (error.message && error.message.includes("409")) { 
+        displayMessage = "This name has already been submitted. Please use a different name.";
+      } else if (error.message) {
+        // Extract a more user-friendly message if possible, otherwise use the generic one
+        const parts = error.message.split("::");
+        if (parts.length > 1) {
+          try {
+            const jsonError = JSON.parse(parts[1].trim());
+            if (jsonError.message) {
+              displayMessage = jsonError.message;
+            }
+          } catch (e) {
+            // If parsing fails, use the latter part of the error or the generic message
+             if (parts[1] && parts[1].trim().length > 0 && parts[1].trim().length < 100) {
+                displayMessage = parts[1].trim();
+             }
+          }
+        } else if (error.message.length < 100) { // Show shorter raw errors
+            displayMessage = error.message;
+        }
       }
       toast({
-        title: "Error",
+        title: "Submission Error",
         description: displayMessage,
         variant: "destructive",
       });
@@ -718,7 +732,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             <div className="text-center sm:text-left">
               <h3 className="text-lg font-semibold mb-1 sm:mb-2">Ready to Submit Your Preferences?</h3>
               <p className="text-blue-100 text-sm">
-                Your detailed preferences will be encrypted client-side before submission to protect your privacy.
+                Your detailed preferences will be base64 encoded before submission.
               </p>
             </div>
             <Button 
