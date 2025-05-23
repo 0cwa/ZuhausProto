@@ -297,7 +297,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
         title: "Success",
         description: "Your preferences have been submitted successfully!",
       });
-      form.reset();
+      form.reset(); // Reset the form after successful submission
     } catch (error: any) {
       toast({
         title: "Error",
@@ -717,7 +717,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
             </div>
             <Button 
               type="submit" 
-              disabled={isSubmitting || !form.formState.isValid && form.formState.isSubmitted}
+              disabled={isSubmitting || !form.formState.isValid} // Simplified disabled logic
               variant="secondary"
               size="lg"
               className="bg-white text-primary hover:bg-blue-50 w-full sm:w-auto"
@@ -735,7 +735,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
               )}
             </Button>
           </div>
-           {!form.formState.isValid && form.formState.isSubmitted && (
+           {!form.formState.isValid && form.formState.isSubmitted && ( // Only show if submitted AND invalid
              <p className="text-sm text-red-200 mt-2 text-center sm:text-right">Please correct the errors above before submitting.</p>
            )}
         </CardContent>
