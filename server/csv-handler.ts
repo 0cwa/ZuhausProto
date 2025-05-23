@@ -61,7 +61,7 @@ export class CSVHandler {
         name: row[0] || `Apartment ${index + 1}`,
         sqMeters: parseFloat(row[1]) || 50,
         numWindows: parseInt(row[2]) || 2,
-        windowDirections: row[3] ? row[3].split(';').map(d => d.trim()).filter(d => d) : [], 
+        windowDirections: row[3] ? row[3].split(',').map(d => d.trim()).filter(d => d) : [], // Changed to split by comma
         totalWindowSize: parseFloat(row[4]) || 10,
         // row[5] is Floor Level, currently not in schema
         numBedrooms: parseInt(row[6]) || 1, 
@@ -92,7 +92,7 @@ export class CSVHandler {
       apt.name,
       apt.sqMeters.toString(),
       apt.numWindows.toString(),
-      apt.windowDirections.join(';'), 
+      apt.windowDirections.join(','), // Changed to join by comma
       apt.totalWindowSize.toString(),
       (apt as any).floorLevel || "1", 
       apt.numBedrooms.toString(),

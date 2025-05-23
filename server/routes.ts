@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { serverKeyPair } from "./crypto";
+import { serverKeyPair } from "./crypto"; // Import the RSAKeyPair instance
 import { csvHandler } from "./csv-handler";
 import { matchingEngine } from "./matching";
 import { formSubmissionSchema, adminAuthSchema } from "@shared/schema";
@@ -9,6 +9,9 @@ import { formSubmissionSchema, adminAuthSchema } from "@shared/schema";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Initialize RSA key pair (load from file or generate new)
+  await serverKeyPair.init();
+
   // Initialize data from CSV files
   try {
     const apartments = await csvHandler.loadApartments();
@@ -112,6 +115,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(apartments);
     } catch (error) {
       res.status(500).json({ message: "Failed to get apartments" });
+    }
+  });
+
+  // Get apartment min/max values for sliders
+  app.get("/api/apartments/min-max", async (req, res) => {
+    try {
+      const apartments = await storage.getApartments();
+      if (apartments.length === 0) {
+        return res.json({
+          sqMeters: { min: 0, max: 0 },
+          numWindows: { min: 0, max: 0 },
+          totalWindowSize: { min: 0, max: 0 },
+          numBedrooms: { min: 0, max: 0 },
+          numBathrooms: { min: 0, max: 0 },
+        });
+      }
+
+      const minMax = {
+        sqMeters: { min: Infinity, max: -Infinity },
+        numWindows: { min: Infinity, max: -Infinity },
+        totalWindowSize: { min: Infinity, max: -Infinity },
+        numBedrooms: { min: Infinity, max: -Infinity },
+        numBathrooms: { min: Infinity, max: -Infinity },
+      };
+
+      apartments.forEach(apt => {
+        minMax.sqMeters.min = Math.min(minMax.sqMeters.min, apt.sqMeters);
+        minMax.sqMeters.max = Math.max(minMax.sqMeters.max, apt.sqMeters);
+        minMax.numWindows.min = Math.min(minMax.numWindows.min, apt.numWindows);
+        minMax.numWindows.max = Math.max(minMax.numWindows.max, apt.numWindows);
+        minMax.totalWindowSize.min = Math.min(minMax.totalWindowSize.min, apt.totalWindowSize);
+        minMax.totalWindowSize.max = Math.max(minMax.totalWindowSize.max, apt.totalWindowSize);
+        minMax.numBedrooms.min = Math.min(minMax.numBedrooms.min, apt.numBedrooms);
+        minMax.numBedrooms.max = Math.max(minMax.numBedrooms.max, apt.numBedrooms);
+        minMax.numBathrooms.min = Math.min(minMax.numBathrooms.min, apt.numBathrooms);
+        minMax.numBathrooms.max = Math.max(minMax.numBathrooms.max, apt.numBathrooms);
+      });
+
+      res.json(minMax);
+    } catch (error) {
+      console.error("Error in /api/apartments/min-max:", error);
+      res.status(500).json({ message: "Failed to get apartment min/max values" });
     }
   });
 

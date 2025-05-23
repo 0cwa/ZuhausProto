@@ -1,6 +1,8 @@
 import crypto from 'crypto';
+import fs from 'fs/promises';
+import path from 'path';
 
-const RSA_ALGORITHM_DETAILS = { // Renamed for clarity
+const RSA_ALGORITHM_DETAILS = {
   name: 'rsa-oaep',
   modulusLength: 2048,
   publicKeyEncoding: { type: 'spki', format: 'pem' } as const,
@@ -11,19 +13,48 @@ const RSA_ALGORITHM_DETAILS = { // Renamed for clarity
 const AES_ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12; // 96-bit IV for AES-GCM
 
-export class RSAKeyPair { // Renamed class from ECKeyPair to RSAKeyPair
+const KEYS_DIR = path.resolve(process.cwd(), 'keys');
+const PRIVATE_KEY_PATH = path.join(KEYS_DIR, '.private_key.pem');
+const PUBLIC_KEY_PATH = path.join(KEYS_DIR, '.public_key.pem'); // Optional, but good practice
+
+export class RSAKeyPair {
   private privateKey: crypto.KeyObject;
   public publicKey: crypto.KeyObject;
 
   constructor() {
-    const keyPair = crypto.generateKeyPairSync('rsa', {
-      modulusLength: RSA_ALGORITHM_DETAILS.modulusLength,
-      publicKeyEncoding: RSA_ALGORITHM_DETAILS.publicKeyEncoding,
-      privateKeyEncoding: RSA_ALGORITHM_DETAILS.privateKeyEncoding,
-    });
+    // Initialize with dummy keys, actual keys will be loaded/generated async
+    this.privateKey = crypto.createPrivateKey('-----BEGIN RSA PRIVATE KEY-----\nMC4CAQAwBQYDK2VuBCIEIEY+2020202020202020202020202020202020202020\n-----END RSA PRIVATE KEY-----');
+    this.publicKey = crypto.createPublicKey('-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAJ+2020202020202020202020202020202020202020\n-----END PUBLIC KEY-----');
+  }
 
-    this.privateKey = keyPair.privateKey;
-    this.publicKey = keyPair.publicKey;
+  async init(): Promise<void> {
+    await fs.mkdir(KEYS_DIR, { recursive: true });
+
+    try {
+      // Try to load existing keys
+      const privateKeyPem = await fs.readFile(PRIVATE_KEY_PATH, 'utf8');
+      const publicKeyPem = await fs.readFile(PUBLIC_KEY_PATH, 'utf8');
+      
+      this.privateKey = crypto.createPrivateKey(privateKeyPem);
+      this.publicKey = crypto.createPublicKey(publicKeyPem);
+      console.log('RSA key pair loaded from files.');
+    } catch (error) {
+      // If files don't exist or are unreadable, generate new keys
+      console.warn('RSA key pair files not found or unreadable. Generating new keys...');
+      const keyPair = crypto.generateKeyPairSync('rsa', {
+        modulusLength: RSA_ALGORITHM_DETAILS.modulusLength,
+        publicKeyEncoding: RSA_ALGORITHM_DETAILS.publicKeyEncoding,
+        privateKeyEncoding: RSA_ALGORITHM_DETAILS.privateKeyEncoding,
+      });
+
+      this.privateKey = keyPair.privateKey;
+      this.publicKey = keyPair.publicKey;
+
+      // Save new keys to files
+      await fs.writeFile(PRIVATE_KEY_PATH, this.privateKey.export(RSA_ALGORITHM_DETAILS.privateKeyEncoding), 'utf8');
+      await fs.writeFile(PUBLIC_KEY_PATH, this.publicKey.export(RSA_ALGORITHM_DETAILS.publicKeyEncoding), 'utf8');
+      console.log('New RSA key pair generated and saved to files.');
+    }
   }
 
   getPublicKeyDER(): Buffer {
@@ -54,7 +85,7 @@ export class RSAKeyPair { // Renamed class from ECKeyPair to RSAKeyPair
         {
           key: this.privateKey,
           padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-          oaepHash: RSA_ALGORITHM_DETAILS.oaepHash, // Use renamed constant
+          oaepHash: RSA_ALGORITHM_DETAILS.oaepHash,
         },
         encryptedAesKeyBuffer
       );
@@ -88,4 +119,6 @@ export class RSAKeyPair { // Renamed class from ECKeyPair to RSAKeyPair
 }
 
 // Global instance
-export const serverKeyPair = new RSAKeyPair(); // Use renamed class
+export const serverKeyPair = new RSAKeyPair();
+// Initialize the key pair asynchronously when the server starts
+// This will be called in server/routes.ts
