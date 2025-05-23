@@ -45,9 +45,9 @@ const formSchema = z.object({
   hasDishwasher: z.boolean(),
   dishwasherWorth: z.number().min(0).optional(),
   hasWasher: z.boolean(),
-  washerWorth: z.number().min(0).optional(),
+  washerWorth: z.number().optional(),
   hasDryer: z.boolean(),
-  dryerWorth: z.number().min(0).optional(),
+  dryerWorth: z.number().optional(),
   bidAmount: z.number().min(0),
   allowRoommates: z.boolean(),
   maxRoommates: z.number().min(1).max(4).optional(),
@@ -55,7 +55,7 @@ const formSchema = z.object({
   quietness: z.number().min(0).max(100).optional(),
   guests: z.number().min(0).max(100).optional(),
   personalSpace: z.number().min(0).max(100).optional(),
-  sleepTime: z.tuple([z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX), z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX)])
+  sleepTime: z.tuple([z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLEEP_TIME_SLIDER_MAX), z.number().min(SLEEP_TIME_SLIDER_MIN).max(SLE-EP_TIME_SLIDER_MAX)])
     .refine(data => data[0] <= data[1], { message: "Min sleep time must be less than or equal to max" }).optional(),
   wakeTime: z.tuple([z.number().min(WAKE_TIME_SLIDER_MIN).max(WAKE_TIME_SLIDER_MAX), z.number().min(WAKE_TIME_SLIDER_MIN).max(WAKE_TIME_SLIDER_MAX)])
     .refine(data => data[0] <= data[1], { message: "Min wake time must be less than or equal to max" }).optional(),
@@ -199,7 +199,6 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
     }
     // For individual count, if not checked, we want to show count of apartments *without* it,
     // or more simply, only query when true. The current behavior is to show total if not set.
-    // To show "0" if no apartments have dishwashers when checked, the backend must return 0.
     // The current issue is likely CSV parsing.
     fetchIndividualCount('hasDishwasher', params);
   }, [watchedValues.hasDishwasher, fetchIndividualCount]);
@@ -426,7 +425,7 @@ export function ApartmentForm({ serverPublicKey, onApartmentCountChange }: Apart
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div className="md:col-span-2 space-y-4">
               <div className="flex justify-between items-center">
-                <Label>Window Directions (match if >=75% of selected are present)</Label>
+                <Label>Window Directions (match if &gt;=75% of selected are present)</Label>
                 {renderCountBadge(individualCounts.windowDirections)}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
